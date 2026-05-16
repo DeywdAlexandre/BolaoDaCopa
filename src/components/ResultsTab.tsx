@@ -4,12 +4,13 @@ import { teams } from '../data/teams';
 import { getPhaseLabel } from '../data/matches';
 import { TeamFlag } from './shared/TeamFlag';
 
-export function ResultsTab({ matches, onUpdateScore, onUpdateTeams, getGroupStandings, onSync, apiKey, setApiKey }: { 
+export function ResultsTab({ matches, onUpdateScore, onUpdateTeams, getGroupStandings, onSync, apiKey, setApiKey, seedMatches }: { 
   matches: Match[];
   onUpdateScore: (id: string, h: number, a: number, f: boolean) => void;
   onUpdateTeams: (id: string, h: Team, a: Team) => void;
   getGroupStandings: (g: string) => { team: Team; pts: number; w: number; d: number; l: number; gf: number; ga: number; gd: number }[];
   onSync?: () => Promise<void>;
+  seedMatches?: () => Promise<void>;
   apiKey?: string;
   setApiKey?: (val: string) => void;
 }) {
@@ -20,9 +21,11 @@ export function ResultsTab({ matches, onUpdateScore, onUpdateTeams, getGroupStan
   const [selHome, setSelHome] = useState('');
   const [selAway, setSelAway] = useState('');
   const [syncing, setSyncing] = useState(false);
+  const [seeding, setSeeding] = useState(false);
   const friendlyMatches = matches.filter(m => m.phase === 'friendly');
   const hasFriendlies = friendlyMatches.length > 0;
   const [activePhase, setActivePhase] = useState(hasFriendlies ? 'friendlies' : 'groups');
+// ... (resto da lógica de saveScore etc continua igual)
 
   const saveScore = (id: string, fin: boolean) => { onUpdateScore(id, parseInt(hScore), parseInt(aScore), fin); setEditingMatch(null); };
   const startEditScore = (m: Match) => { setEditingMatch(m.id); setHScore(m.homeScore?.toString()||'0'); setAScore(m.awayScore?.toString()||'0'); };
@@ -110,24 +113,34 @@ export function ResultsTab({ matches, onUpdateScore, onUpdateTeams, getGroupStan
                 onClick={async () => { 
                   console.log('Botão de sincronização clicado!');
                   setSyncing(true); 
-                  try { 
-                    await onSync(); 
-                  } catch (err) {
-                    console.error('Erro ao executar onSync:', err);
-                  } finally { 
-                    setSyncing(false); 
-                  } 
+                  try { await onSync(); } finally { setSyncing(false); } 
                 }} 
-                disabled={syncing} 
+                disabled={syncing || seeding} 
                 className={`btn-primary text-xs py-2 flex items-center justify-center gap-2 px-6 ${syncing ? 'opacity-50 cursor-wait' : ''}`}
               >
                 {syncing ? <span className="animate-spin text-lg">🔄</span> : <span className="text-lg text-white">⚡</span>} 
-                {syncing ? 'Processando...' : 'Sincronizar Agora'}
+                {syncing ? 'Sincronizando...' : 'Sincronizar API'}
+              </button>
+            )}
+
+            {seedMatches && (
+              <button 
+                onClick={async () => { 
+                  if(confirm('Gerar tabela oficial de 2026? Isso vai encher o banco de dados com os jogos reais.')) {
+                    setSeeding(true);
+                    try { await seedMatches(); } finally { setSeeding(false); }
+                  }
+                }} 
+                disabled={syncing || seeding} 
+                className={`bg-blue-600 text-white text-xs py-2 flex items-center justify-center gap-2 px-6 rounded-xl font-semibold shadow-md hover:bg-blue-700 transition-all ${seeding ? 'opacity-50 cursor-wait' : ''}`}
+              >
+                {seeding ? <span className="animate-spin text-lg">🔄</span> : <span className="text-lg">⭐</span>} 
+                {seeding ? 'Gerando...' : 'Gerar Tabela 2026'}
               </button>
             )}
           </div>
         </div>
-        {!apiKey && <p className="text-[10px] text-red-500 mt-2 text-right">⚠️ API Key obrigatória para sincronizar.</p>}
+        {!apiKey && <p className="text-[10px] text-red-500 mt-2 text-right">⚠️ API Key obrigatória para o botão amarelo.</p>}
       </div>
 
       <div className="flex gap-1 overflow-x-auto pb-2">

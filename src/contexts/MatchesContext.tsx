@@ -7,6 +7,7 @@ interface MatchesContextType {
   matches: Match[];
   isLoading: boolean;
   syncMatches: (apiKey: string) => Promise<void>;
+  seedMatches: () => Promise<void>;
   updateMatchScore: (matchId: string, homeScore: number, awayScore: number, finished: boolean) => Promise<void>;
   updateMatchTeams: (matchId: string, homeTeam: Team, awayTeam: Team) => Promise<void>;
   getMatch: (id: string) => Match | undefined;
@@ -97,6 +98,38 @@ export function MatchesProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const seedMatches = async () => {
+    try {
+      console.log('Gerando tabela da Copa 2026...');
+      const initialMatches = generateInitialMatches();
+      
+      for (const m of initialMatches) {
+        await supabase
+          .from('matches')
+          .upsert({
+            external_id: m.external_id,
+            date: m.date,
+            time: m.time,
+            home_team_name: m.homeTeam?.name,
+            home_team_code: m.homeTeam?.code,
+            home_team_flag: m.homeTeam?.iso,
+            away_team_name: m.awayTeam?.name,
+            away_team_code: m.awayTeam?.code,
+            away_team_flag: m.awayTeam?.iso,
+            group: m.group,
+            phase: m.phase,
+            finished: false
+          }, { onConflict: 'external_id' });
+      }
+
+      await fetchMatches();
+      console.log('Tabela gerada com sucesso!');
+    } catch (err) {
+      console.error('Erro ao gerar tabela:', err);
+      throw err;
+    }
+  };
+
   const updateMatchScore = async (matchId: string, homeScore: number, awayScore: number, finished: boolean) => {
     const { error } = await supabase
       .from('matches')
@@ -155,7 +188,7 @@ export function MatchesProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <MatchesContext.Provider value={{ matches, isLoading, syncMatches, updateMatchScore, updateMatchTeams, getMatch, getGroupStandings }}>
+    <MatchesContext.Provider value={{ matches, isLoading, syncMatches, seedMatches, updateMatchScore, updateMatchTeams, getMatch, getGroupStandings }}>
       {children}
     </MatchesContext.Provider>
   );

@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+:root {
+  --verde-brasil: #009739;
+  --amarelo-brasil: #FEDD00;
+  --azul-brasil: #002776;
+}
+
+* {
+  font-family: 'Poppins', sans-serif;
+}
+
+body {
+  background: linear-gradient(135deg, #009739 0%, #006428 100%);
+  min-height: 100vh;
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+}
+
+.card {
+  @apply bg-white rounded-2xl shadow-xl p-4 md:p-6;
+}
+
+.input-field {
+  @apply w-full px-3 md:px-4 py-2.5 md:py-3 border-2 border-gray-200 rounded-xl focus:border-green-500 focus:outline-none transition-colors text-sm md:text-base;
+}
+
+.btn-primary {
+  @apply bg-gradient-to-r from-green-600 to-green-700 text-white font-semibold py-2.5 md:py-3 px-4 md:px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 text-sm md:text-base;
+}
+
+.btn-secondary {
+  @apply bg-gradient-to-r from-yellow-400 to-yellow-500 text-green-900 font-semibold py-2.5 md:py-3 px-4 md:px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 text-sm md:text-base;
+}
+
+/* Scroll horizontal suave para tabs */
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.overflow-x-auto::-webkit-scrollbar {
+  display: none;
+}
+
+/* Animação de entrada */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s ease-out forwards;
+}
+
+/* Scrollbar personalizada */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #009739;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #006428;
+}

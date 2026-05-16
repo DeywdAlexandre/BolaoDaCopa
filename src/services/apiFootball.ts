@@ -1,10 +1,11 @@
-const API_URL = 'https://v3.football.api-sports.io';
+const API_URL = '/api-football';
 const LEAGUE_ID = 1; // ID padrão da Copa do Mundo na API-Football
 const SEASON = 2026;
 
 export interface ApiMatch {
   fixture: {
     id: number;
+    date: string;
     status: {
       short: string;
     };

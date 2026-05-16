@@ -51,15 +51,19 @@ export function ManagerPanel() {
     });
   };
 
-  const handleUpdatePanelName = () => {
+  const handleUpdatePanelName = async () => {
     if (manager) {
-      updateManager(manager.id, { panelName: panelName.trim() || undefined });
-      setEditingPanelName(false);
-      toast('Nome do painel atualizado!', 'success');
+      try {
+        await updateManager(manager.id, { panelName: panelName.trim() || undefined });
+        setEditingPanelName(false);
+        toast('Nome do painel atualizado!', 'success');
+      } catch (err: any) {
+        toast(err.message, 'error');
+      }
     }
   };
 
-  const handleCreatePool = () => {
+  const handleCreatePool = async () => {
     if (!selectedMatch) { toast('Selecione um jogo', 'warning'); return; }
     const match = matches.find(m => m.id === selectedMatch);
     if (!match) return;
@@ -67,8 +71,30 @@ export function ManagerPanel() {
     let deadline = bettingDeadline ? new Date(bettingDeadline) : matchDateTime;
     if (deadline > matchDateTime) deadline = matchDateTime;
 
-    const result = createPool({ matchId: selectedMatch, managerId: user?.id || '', managerCode, betValue: parseFloat(betValue), maxRepeatedBets: parseInt(maxRepeated), includeExtraTime, maintenanceFee: parseFloat(maintenanceFee), bonusAmount: parseFloat(bonusAmount), bettingDeadline: deadline.toISOString(), status: 'open' });
-    if (result.success) { toast('Bolão criado com sucesso!', 'success'); setSelectedMatch(''); setBettingDeadline(''); setActiveTab('pools'); } else toast(result.message, 'error');
+    try {
+      const result = await createPool({ 
+        matchId: selectedMatch, 
+        managerId: user?.id || '', 
+        managerCode, 
+        betValue: parseFloat(betValue), 
+        maxRepeatedBets: parseInt(maxRepeated), 
+        includeExtraTime, 
+        maintenanceFee: parseFloat(maintenanceFee), 
+        bonusAmount: parseFloat(bonusAmount), 
+        bettingDeadline: deadline.toISOString(), 
+        status: 'open' 
+      });
+      if (result.success) { 
+        toast('Bolão criado com sucesso!', 'success'); 
+        setSelectedMatch(''); 
+        setBettingDeadline(''); 
+        setActiveTab('pools'); 
+      } else {
+        toast(result.message, 'error');
+      }
+    } catch (err: any) {
+      toast(err.message, 'error');
+    }
   };
 
   const getMatch = (matchId: string) => matches.find(m => m.id === matchId);
@@ -139,9 +165,9 @@ export function ManagerPanel() {
         </div>
 
         {activeTab === 'dashboard' && <DashboardManager pools={managerPools} getBetsByPool={getBetsByPool} />}
-        {activeTab === 'pools' && <PoolsList pools={managerPools} getMatch={getMatch} onClose={(id) => { if (confirm('Fechar bolão para novos palpites?')) { updatePool(id, { status: 'closed' }); toast('Bolão fechado', 'info'); } }} onFinish={(id) => { if (confirm('Finalizar e calcular vencedores?')) { finishPool(id); toast('Bolão finalizado!', 'success'); } }} onDelete={(id) => { const r = deletePool(id); if (!r.success) toast(r.message, 'error'); else toast('Bolão excluído', 'info'); }} onReopen={(id) => updatePool(id, { status: 'open' })} getBetsByPool={getBetsByPool} />}
+        {activeTab === 'pools' && <PoolsList pools={managerPools} getMatch={getMatch} onClose={async (id) => { if (confirm('Fechar bolão para novos palpites?')) { await updatePool(id, { status: 'closed' }); toast('Bolão fechado', 'info'); } }} onFinish={async (id) => { if (confirm('Finalizar e calcular vencedores?')) { await finishPool(id); toast('Bolão finalizado!', 'success'); } }} onDelete={async (id) => { const r = await deletePool(id); if (!r.success) toast(r.message, 'error'); else toast('Bolão excluído', 'info'); }} onReopen={async (id) => await updatePool(id, { status: 'open' })} getBetsByPool={getBetsByPool} />}
         {activeTab === 'create' && <CreatePoolForm matches={matches.filter(m => !m.finished && m.homeTeam.code !== 'TBD')} selectedMatch={selectedMatch} setSelectedMatch={setSelectedMatch} betValue={betValue} setBetValue={setBetValue} maxRepeated={maxRepeated} setMaxRepeated={setMaxRepeated} includeExtraTime={includeExtraTime} setIncludeExtraTime={setIncludeExtraTime} maintenanceFee={maintenanceFee} setMaintenanceFee={setMaintenanceFee} bonusAmount={bonusAmount} setBonusAmount={setBonusAmount} bettingDeadline={bettingDeadline} setBettingDeadline={setBettingDeadline} onCreate={handleCreatePool} existingPools={managerPools} isBlocked={isBlocked} />}
-        {activeTab === 'bets' && <BetsList pools={managerPools} getMatch={getMatch} getBetsByPool={getBetsByPool} onValidate={validateBet} onCancel={cancelBet} createManualBet={createManualBet} />}
+        {activeTab === 'bets' && <BetsList pools={managerPools} getMatch={getMatch} getBetsByPool={getBetsByPool} onValidate={async (id, val) => await validateBet(id, val)} onCancel={async (id) => { if (confirm('Cancelar este palpite?')) await cancelBet(id); }} createManualBet={async (data) => await createManualBet(data)} />}
       </div>
     </div>
   );

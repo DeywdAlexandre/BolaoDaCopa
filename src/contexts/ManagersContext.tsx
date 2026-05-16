@@ -1,11 +1,13 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { AuthorizedManager } from '../types';
+import { supabase } from '../lib/supabase';
 
 interface ManagersContextType {
   authorizedManagers: AuthorizedManager[];
-  addManager: (email: string, name: string, platformFee?: number) => string;
-  updateManager: (id: string, updates: Partial<AuthorizedManager>) => void;
-  removeManager: (id: string) => void;
+  isLoading: boolean;
+  addManager: (email: string, name: string, platformFee?: number) => Promise<string>;
+  updateManager: (id: string, updates: Partial<AuthorizedManager>) => Promise<void>;
+  removeManager: (id: string) => Promise<void>;
   getManagerByCode: (code: string) => AuthorizedManager | undefined;
 }
 
@@ -20,47 +22,82 @@ const generateCode = (): string => {
   return code;
 };
 
-function loadFromStorage<T>(key: string, fallback: T): T {
-  try {
-    const saved = localStorage.getItem(key);
-    if (saved) return JSON.parse(saved);
-  } catch { /* ignore */ }
-  return fallback;
-}
-
 export function ManagersProvider({ children }: { children: ReactNode }) {
-  const [authorizedManagers, setAuthorizedManagers] = useState<AuthorizedManager[]>(
-    () => loadFromStorage('bolao_managers', [])
-  );
+  const [authorizedManagers, setAuthorizedManagers] = useState<AuthorizedManager[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchManagers = async () => {
+    try {
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from('authorized_managers')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      if (data) {
+        const formatted: AuthorizedManager[] = data.map(m => ({
+          id: m.id,
+          email: m.email,
+          name: m.name,
+          panelName: m.panel_name,
+          code: m.manager_code,
+          platformFee: 3, // Poderia ser campo no banco
+          authorizedAt: m.created_at,
+          authorizedBy: 'super_admin'
+        }));
+        setAuthorizedManagers(formatted);
+      }
+    } catch (err) {
+      console.error('Erro ao buscar gerentes:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    localStorage.setItem('bolao_managers', JSON.stringify(authorizedManagers));
-  }, [authorizedManagers]);
+    fetchManagers();
+  }, []);
 
-  const addManager = (email: string, name: string, platformFee: number = 3): string => {
+  const addManager = async (email: string, name: string, platformFee: number = 3): Promise<string> => {
     const code = generateCode();
-    const newManager: AuthorizedManager = {
-      id: `mgr_${Date.now()}`,
-      email: email.toLowerCase(),
-      name,
-      code,
-      platformFee,
-      blocked: false,
-      authorizedAt: new Date().toISOString(),
-      authorizedBy: 'super_admin'
-    };
-    setAuthorizedManagers(prev => [...prev, newManager]);
+    const { error } = await supabase
+      .from('authorized_managers')
+      .insert({
+        email: email.toLowerCase(),
+        name,
+        manager_code: code,
+        panel_name: `Bolão de ${name}`
+      });
+
+    if (error) throw error;
+    await fetchManagers();
     return code;
   };
 
-  const updateManager = (id: string, updates: Partial<AuthorizedManager>) => {
-    setAuthorizedManagers(prev => prev.map(m => 
-      m.id === id ? { ...m, ...updates } : m
-    ));
+  const updateManager = async (id: string, updates: Partial<AuthorizedManager>) => {
+    const { error } = await supabase
+      .from('authorized_managers')
+      .update({
+        name: updates.name,
+        panel_name: updates.panelName,
+        email: updates.email
+      })
+      .eq('id', id);
+
+    if (error) throw error;
+    await fetchManagers();
   };
 
-  const removeManager = (id: string) => {
-    setAuthorizedManagers(prev => prev.filter(m => m.id !== id));
+  const removeManager = async (id: string) => {
+    const { error } = await supabase
+      .from('authorized_managers')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    await fetchManagers();
   };
 
   const getManagerByCode = (code: string): AuthorizedManager | undefined => {
@@ -70,6 +107,7 @@ export function ManagersProvider({ children }: { children: ReactNode }) {
   return (
     <ManagersContext.Provider value={{
       authorizedManagers,
+      isLoading,
       addManager,
       updateManager,
       removeManager,
@@ -82,8 +120,6 @@ export function ManagersProvider({ children }: { children: ReactNode }) {
 
 export function useManagers() {
   const context = useContext(ManagersContext);
-  if (context === undefined) {
-    throw new Error('useManagers must be used within a ManagersProvider');
-  }
+  if (context === undefined) throw new Error('useManagers must be used within a ManagersProvider');
   return context;
 }

@@ -7,7 +7,7 @@ export function AvailablePools({
   pools, matches, userId, userName, myBets, createBet, getBetCount, getBetsByPool
 }: {
   pools: Pool[]; matches: Match[]; userId: string; userName: string; myBets: Bet[];
-  createBet: (bet: Omit<Bet, 'id' | 'createdAt'>) => { success: boolean; message: string };
+  createBet: (bet: Omit<Bet, 'id' | 'createdAt'>) => Promise<{ success: boolean; message: string }>;
   getBetCount: (poolId: string, homeScore: number, awayScore: number) => number;
   getBetsByPool: (poolId: string) => Bet[];
 }) {
@@ -15,14 +15,27 @@ export function AvailablePools({
   const [homeScore, setHomeScore] = useState('0');
   const [awayScore, setAwayScore] = useState('0');
   const [showBets, setShowBets] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { toast } = useToast();
   const getMatch = (matchId: string) => matches.find(m => m.id === matchId);
   
-  const handleBet = (poolId: string, matchId: string) => {
-    const result = createBet({ poolId, matchId, userId, userName, homeScore: parseInt(homeScore), awayScore: parseInt(awayScore), validated: false, isManualBet: false });
-    if (result.success) { setSelectedPool(null); setHomeScore('0'); setAwayScore('0'); toast('Palpite registrado! Aguarde validação do gerente.', 'success'); }
-    else toast(result.message, 'error');
+  const handleBet = async (poolId: string, matchId: string) => {
+    if (isSubmitting) return;
+    try {
+      setIsSubmitting(true);
+      const result = await createBet({ poolId, matchId, userId, userName, homeScore: parseInt(homeScore), awayScore: parseInt(awayScore), validated: false, isManualBet: false });
+      if (result.success) { 
+        setSelectedPool(null); setHomeScore('0'); setAwayScore('0'); 
+        toast('Palpite registrado! Aguarde validação do gerente.', 'success'); 
+      } else {
+        toast(result.message, 'error');
+      }
+    } catch (err: any) {
+      toast(err.message, 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (pools.length === 0) {
@@ -141,7 +154,9 @@ export function AvailablePools({
                 </div>
                 {isScoreFull && <div className="bg-red-100 text-red-700 text-sm p-2 rounded-lg mb-3 text-center">⚠️ Limite atingido</div>}
                 <div className="flex gap-2">
-                  <button onClick={() => handleBet(pool.id, pool.matchId)} disabled={isScoreFull} className={`flex-1 py-3 rounded-xl font-semibold transition-all ${isScoreFull ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'btn-primary'}`}>Confirmar Palpite</button>
+                  <button onClick={() => handleBet(pool.id, pool.matchId)} disabled={isScoreFull || isSubmitting} className={`flex-1 py-3 rounded-xl font-semibold transition-all ${isScoreFull || isSubmitting ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'btn-primary'}`}>
+                    {isSubmitting ? '⏳ Enviando...' : 'Confirmar Palpite'}
+                  </button>
                   <button onClick={() => setSelectedPool(null)} className="px-4 py-3 bg-gray-200 text-gray-600 rounded-xl hover:bg-gray-300">Cancelar</button>
                 </div>
                 <p className="text-xs text-gray-500 mt-3 text-center">💡 Pague R$ {pool.betValue} ao gerente para validar</p>

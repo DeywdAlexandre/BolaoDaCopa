@@ -25,19 +25,23 @@ export function SuperAdminPanel() {
 
   const { toast } = useToast();
 
+  const [apiKey, setApiKey] = useState((import.meta as any).env.VITE_FOOTBALL_API_KEY || '');
+  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+
   const handleSync = async () => {
-    let key = (import.meta as any).env.VITE_FOOTBALL_API_KEY;
-    if (!key) key = prompt('Digite sua API Key da API-Football (v3.football.api-sports.io):');
-    if (!key) return;
+    if (!apiKey) { 
+      toast('Por favor, informe a API Key primeiro', 'warning'); 
+      return; 
+    }
     try {
-      await syncMatches(key);
+      console.log('Chamando syncMatches com a chave informada...');
+      await syncMatches(apiKey);
       toast('Resultados sincronizados com sucesso!', 'success');
     } catch (err: any) {
-      toast(err.message, 'error');
+      console.error('Erro na sincronização:', err);
+      toast(err.message || 'Erro ao sincronizar', 'error');
     }
   };
-  
-  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [newManagerEmail, setNewManagerEmail] = useState('');
   const [newManagerName, setNewManagerName] = useState('');
   const [newManagerFee, setNewManagerFee] = useState('3');
@@ -45,19 +49,28 @@ export function SuperAdminPanel() {
   const [editingManager, setEditingManager] = useState<string | null>(null);
   const [editFee, setEditFee] = useState('');
 
-  const handleAddManager = () => {
+  const handleAddManager = async () => {
     if (!newManagerEmail || !newManagerName) { toast('Preencha email e nome', 'warning'); return; }
-    const code = addManager(newManagerEmail, newManagerName, parseFloat(newManagerFee) || 3);
-    setShowSuccess(`Gerente adicionado! Código: ${code}`);
-    setNewManagerEmail(''); setNewManagerName(''); setNewManagerFee('3');
-    setTimeout(() => setShowSuccess(null), 5000);
+    try {
+      const code = await addManager(newManagerEmail, newManagerName, parseFloat(newManagerFee) || 3);
+      setShowSuccess(`Gerente adicionado! Código: ${code}`);
+      setNewManagerEmail(''); setNewManagerName(''); setNewManagerFee('3');
+      setTimeout(() => setShowSuccess(null), 5000);
+    } catch (err: any) {
+      toast(err.message, 'error');
+    }
   };
 
-  const handleUpdateFee = (managerId: string) => {
+  const handleUpdateFee = async (managerId: string) => {
     const fee = parseFloat(editFee);
     if (isNaN(fee) || fee < 0 || fee > 50) { toast('Taxa deve ser entre 0 e 50%', 'warning'); return; }
-    updateManager(managerId, { platformFee: fee });
-    setEditingManager(null); setEditFee('');
+    try {
+      await updateManager(managerId, { platformFee: fee });
+      setEditingManager(null); setEditFee('');
+      toast('Taxa atualizada com sucesso!', 'success');
+    } catch (err: any) {
+      toast(err.message, 'error');
+    }
   };
 
   const tabs = [
@@ -92,8 +105,8 @@ export function SuperAdminPanel() {
         </div>
 
         {activeTab === 'dashboard' && <DashboardTab stats={stats} />}
-        {activeTab === 'managers' && <ManagersTab managers={authorizedManagers} pools={pools} bets={bets} newEmail={newManagerEmail} setNewEmail={setNewManagerEmail} newName={newManagerName} setNewName={setNewManagerName} newFee={newManagerFee} setNewFee={setNewManagerFee} showSuccess={showSuccess} onAdd={handleAddManager} onToggleBlock={(m) => updateManager(m.id, { blocked: !m.blocked })} onRemove={(id, name) => { if (confirm(`Remover "${name}"?`)) removeManager(id); }} editingManager={editingManager} setEditingManager={setEditingManager} editFee={editFee} setEditFee={setEditFee} onUpdateFee={handleUpdateFee} />}
-        {activeTab === 'results' && <ResultsTab matches={matches} onUpdateScore={updateMatchScore} onUpdateTeams={updateMatchTeams} getGroupStandings={getGroupStandings} onSync={handleSync} />}
+        {activeTab === 'managers' && <ManagersTab managers={authorizedManagers} pools={pools} bets={bets} newEmail={newManagerEmail} setNewEmail={setNewManagerEmail} newName={newManagerName} setNewName={setNewManagerName} newFee={newManagerFee} setNewFee={setNewManagerFee} showSuccess={showSuccess} onAdd={handleAddManager} onToggleBlock={async (m) => await updateManager(m.id, { blocked: !m.blocked })} onRemove={async (id, name) => { if (confirm(`Remover "${name}"?`)) await removeManager(id); }} editingManager={editingManager} setEditingManager={setEditingManager} editFee={editFee} setEditFee={setEditFee} onUpdateFee={handleUpdateFee} />}
+        {activeTab === 'results' && <ResultsTab matches={matches} onUpdateScore={updateMatchScore} onUpdateTeams={updateMatchTeams} getGroupStandings={getGroupStandings} onSync={handleSync} apiKey={apiKey} setApiKey={setApiKey} />}
         {activeTab === 'pools' && <PoolsTab pools={pools} matches={matches} managers={authorizedManagers} getBetsByPool={getBetsByPool} />}
         {activeTab === 'bets' && <BetsTab bets={bets} pools={pools} matches={matches} />}
         {activeTab === 'finances' && <FinancesTab stats={stats} managers={authorizedManagers} />}

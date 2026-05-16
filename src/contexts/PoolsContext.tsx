@@ -1,13 +1,13 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Pool } from '../types';
-import { useManagers } from './ManagersContext';
+import { supabase } from '../lib/supabase';
 
 interface PoolsContextType {
   pools: Pool[];
-  createPool: (pool: Omit<Pool, 'id' | 'createdAt'>) => { success: boolean; message: string };
-  updatePool: (id: string, updates: Partial<Pool>) => void;
-  deletePool: (id: string) => { success: boolean; message: string };
-  getPoolsByManager: (managerId: string) => Pool[];
+  isLoading: boolean;
+  createPool: (pool: Omit<Pool, 'id' | 'createdAt'>) => Promise<{ success: boolean; message: string }>;
+  updatePool: (id: string, updates: Partial<Pool>) => Promise<void>;
+  deletePool: (id: string) => Promise<{ success: boolean; message: string }>;
   getPoolsByCode: (managerCode: string) => Pool[];
   getFinishedPoolsByCode: (managerCode: string) => Pool[];
   getAllPools: () => Pool[];
@@ -15,62 +15,91 @@ interface PoolsContextType {
 
 const PoolsContext = createContext<PoolsContextType | undefined>(undefined);
 
-function loadFromStorage<T>(key: string, fallback: T): T {
-  try {
-    const saved = localStorage.getItem(key);
-    if (saved) return JSON.parse(saved);
-  } catch { /* ignore */ }
-  return fallback;
-}
-
 export function PoolsProvider({ children }: { children: ReactNode }) {
-  const { authorizedManagers } = useManagers();
-  const [pools, setPools] = useState<Pool[]>(
-    () => loadFromStorage('bolao_pools', [])
-  );
+  const [pools, setPools] = useState<Pool[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchPools = async () => {
+    try {
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from('pools')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      if (data) {
+        const formatted: Pool[] = data.map(p => ({
+          id: p.id,
+          matchId: p.match_id,
+          managerId: p.manager_code, // Usando code como ID para simplificar
+          managerCode: p.manager_code,
+          betValue: parseFloat(p.bet_value),
+          maintenanceFee: p.maintenance_fee,
+          bonusAmount: parseFloat(p.bonus_amount),
+          maxRepeatedBets: p.max_repeated_bets,
+          includeExtraTime: p.include_extra_time,
+          bettingDeadline: p.betting_deadline,
+          status: p.status as any,
+          createdAt: p.created_at
+        }));
+        setPools(formatted);
+      }
+    } catch (err) {
+      console.error('Erro ao buscar bolões:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    localStorage.setItem('bolao_pools', JSON.stringify(pools));
-  }, [pools]);
+    fetchPools();
+  }, []);
 
-  const createPool = (poolData: Omit<Pool, 'id' | 'createdAt'>): { success: boolean; message: string } => {
-    const manager = authorizedManagers.find(m => m.code === poolData.managerCode);
-    if (manager?.blocked) {
-      return { success: false, message: 'Você está bloqueado para criar novos bolões. Entre em contato com o administrador.' };
-    }
-    
-    const newPool: Pool = {
-      ...poolData,
-      id: `pool_${Date.now()}`,
-      createdAt: new Date().toISOString()
-    };
-    setPools(prev => [...prev, newPool]);
+  const createPool = async (poolData: Omit<Pool, 'id' | 'createdAt'>): Promise<{ success: boolean; message: string }> => {
+    const { error } = await supabase
+      .from('pools')
+      .insert({
+        match_id: poolData.matchId,
+        manager_code: poolData.managerCode,
+        bet_value: poolData.betValue,
+        maintenance_fee: poolData.maintenanceFee,
+        bonus_amount: poolData.bonusAmount,
+        max_repeated_bets: poolData.maxRepeatedBets,
+        include_extra_time: poolData.includeExtraTime,
+        betting_deadline: poolData.bettingDeadline,
+        status: poolData.status
+      });
+
+    if (error) return { success: false, message: error.message };
+    await fetchPools();
     return { success: true, message: 'Bolão criado com sucesso!' };
   };
 
-  const updatePool = (id: string, updates: Partial<Pool>) => {
-    setPools(prev => prev.map(p => 
-      p.id === id ? { ...p, ...updates } : p
-    ));
+  const updatePool = async (id: string, updates: Partial<Pool>) => {
+    const { error } = await supabase
+      .from('pools')
+      .update({
+        status: updates.status,
+        betting_deadline: updates.bettingDeadline,
+        max_repeated_bets: updates.maxRepeatedBets
+      })
+      .eq('id', id);
+
+    if (error) throw error;
+    await fetchPools();
   };
 
-  const deletePool = (id: string): { success: boolean; message: string } => {
-    const pool = pools.find(p => p.id === id);
-    if (!pool) return { success: false, message: 'Bolão não encontrado' };
-    
-    if (pool.status === 'finished') {
-      return { success: false, message: 'Não é possível excluir um bolão já finalizado' };
-    }
-    
-    // Nota: A verificação de apostas validadas será feita no componente ou via hook
-    // para evitar dependência circular se BetsProvider precisar de PoolsProvider
-    
-    setPools(prev => prev.filter(p => p.id !== id));
+  const deletePool = async (id: string): Promise<{ success: boolean; message: string }> => {
+    const { error } = await supabase
+      .from('pools')
+      .delete()
+      .eq('id', id);
+
+    if (error) return { success: false, message: error.message };
+    await fetchPools();
     return { success: true, message: 'Bolão excluído com sucesso' };
-  };
-
-  const getPoolsByManager = (managerId: string): Pool[] => {
-    return pools.filter(p => p.managerId === managerId);
   };
 
   const getPoolsByCode = (managerCode: string): Pool[] => {
@@ -86,10 +115,10 @@ export function PoolsProvider({ children }: { children: ReactNode }) {
   return (
     <PoolsContext.Provider value={{
       pools,
+      isLoading,
       createPool,
       updatePool,
       deletePool,
-      getPoolsByManager,
       getPoolsByCode,
       getFinishedPoolsByCode,
       getAllPools
@@ -101,8 +130,6 @@ export function PoolsProvider({ children }: { children: ReactNode }) {
 
 export function usePools() {
   const context = useContext(PoolsContext);
-  if (context === undefined) {
-    throw new Error('usePools must be used within a PoolsProvider');
-  }
+  if (context === undefined) throw new Error('usePools must be used within a PoolsProvider');
   return context;
 }

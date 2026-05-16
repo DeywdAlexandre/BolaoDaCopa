@@ -4,12 +4,14 @@ import { teams } from '../data/teams';
 import { getPhaseLabel } from '../data/matches';
 import { TeamFlag } from './shared/TeamFlag';
 
-export function ResultsTab({ matches, onUpdateScore, onUpdateTeams, getGroupStandings }: { 
+export function ResultsTab({ matches, onUpdateScore, onUpdateTeams, getGroupStandings, onSync, apiKey, setApiKey }: { 
   matches: Match[];
   onUpdateScore: (id: string, h: number, a: number, f: boolean) => void;
   onUpdateTeams: (id: string, h: Team, a: Team) => void;
   getGroupStandings: (g: string) => { team: Team; pts: number; w: number; d: number; l: number; gf: number; ga: number; gd: number }[];
   onSync?: () => Promise<void>;
+  apiKey?: string;
+  setApiKey?: (val: string) => void;
 }) {
   const [editingMatch, setEditingMatch] = useState<string | null>(null);
   const [hScore, setHScore] = useState('0');
@@ -79,23 +81,53 @@ export function ResultsTab({ matches, onUpdateScore, onUpdateTeams, getGroupStan
 
   return (
     <div className="space-y-4">
-      <div className="card bg-gradient-to-r from-red-50 to-yellow-50 border-2 border-red-200 p-3">
-        <div className="flex items-center gap-3">
-          <span className="text-2xl">🔒</span>
-          <div>
-            <h2 className="text-sm md:text-lg font-bold text-gray-800">Resultados das Partidas</h2>
-            <p className="text-xs text-gray-600">Apenas você pode definir resultados e seleções do mata-mata.</p>
+      <div className="card bg-gradient-to-r from-red-50 to-yellow-50 border-2 border-red-200 p-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">📡</span>
+            <div>
+              <h2 className="text-lg font-bold text-gray-800">Sincronização de Dados</h2>
+              <p className="text-xs text-gray-600">Busque resultados oficiais da API-Football (v3).</p>
+            </div>
+          </div>
+          
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            {setApiKey && (
+              <div className="relative">
+                <input 
+                  type="password" 
+                  value={apiKey} 
+                  onChange={(e) => setApiKey(e.target.value)} 
+                  placeholder="Cole sua API Key aqui..." 
+                  className="input-field text-xs py-2 w-full sm:w-64 pr-8"
+                />
+                {apiKey && <span className="absolute right-2 top-1/2 -translate-y-1/2 text-green-500">✓</span>}
+              </div>
+            )}
+            
+            {onSync && (
+              <button 
+                onClick={async () => { 
+                  console.log('Botão de sincronização clicado!');
+                  setSyncing(true); 
+                  try { 
+                    await onSync(); 
+                  } catch (err) {
+                    console.error('Erro ao executar onSync:', err);
+                  } finally { 
+                    setSyncing(false); 
+                  } 
+                }} 
+                disabled={syncing} 
+                className={`btn-primary text-xs py-2 flex items-center justify-center gap-2 px-6 ${syncing ? 'opacity-50 cursor-wait' : ''}`}
+              >
+                {syncing ? <span className="animate-spin text-lg">🔄</span> : <span className="text-lg text-white">⚡</span>} 
+                {syncing ? 'Processando...' : 'Sincronizar Agora'}
+              </button>
+            )}
           </div>
         </div>
-        {onSync && (
-          <button 
-            onClick={async () => { setSyncing(true); try { await onSync(); } finally { setSyncing(false); } }} 
-            disabled={syncing} 
-            className={`btn-primary text-xs py-2 flex items-center gap-2 ${syncing ? 'opacity-50' : ''}`}
-          >
-            {syncing ? <span className="animate-spin">🔄</span> : '📡'} {syncing ? 'Sincronizando...' : 'Sincronizar Resultados'}
-          </button>
-        )}
+        {!apiKey && <p className="text-[10px] text-red-500 mt-2 text-right">⚠️ API Key obrigatória para sincronizar.</p>}
       </div>
 
       <div className="flex gap-1 overflow-x-auto pb-2">

@@ -1,158 +1,161 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Match, Team } from '../types';
-import { matches as initialMatches } from '../data/matches';
-import { teams } from '../data/teams';
 import { fetchWorldCupResults } from '../services/apiFootball';
+import { supabase } from '../lib/supabase';
 
 interface MatchesContextType {
   matches: Match[];
-  updateMatchScore: (matchId: string, homeScore: number, awayScore: number, finished: boolean) => void;
-  updateMatchTeams: (matchId: string, homeTeam: Team, awayTeam: Team) => void;
-  updateMatchDetails: (matchId: string, updates: Partial<Match>) => void;
-  getGroupStandings: (group: string) => { team: Team; pts: number; w: number; d: number; l: number; gf: number; ga: number; gd: number }[];
+  isLoading: boolean;
   syncMatches: (apiKey: string) => Promise<void>;
+  updateMatchScore: (matchId: string, homeScore: number, awayScore: number, finished: boolean) => Promise<void>;
+  updateMatchTeams: (matchId: string, homeTeam: Team, awayTeam: Team) => Promise<void>;
+  getMatch: (id: string) => Match | undefined;
+  getGroupStandings: (group: string) => { team: Team; pts: number; w: number; d: number; l: number; gf: number; ga: number; gd: number }[];
 }
 
 const MatchesContext = createContext<MatchesContextType | undefined>(undefined);
 
-function loadFromStorage<T>(key: string, fallback: T): T {
-  try {
-    const saved = localStorage.getItem(key);
-    if (saved) return JSON.parse(saved);
-  } catch { /* ignore */ }
-  return fallback;
-}
-
 export function MatchesProvider({ children }: { children: ReactNode }) {
-  const [matches, setMatches] = useState<Match[]>(
-    () => loadFromStorage('bolao_matches', initialMatches)
-  );
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchMatches = async () => {
+    try {
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from('matches')
+        .select('*')
+        .order('date', { ascending: true });
+
+      if (error) throw error;
+
+      if (data) {
+        const formatted: Match[] = data.map(m => ({
+          id: m.id,
+          externalId: m.external_id,
+          date: m.date,
+          time: m.time,
+          homeTeam: { id: m.home_team_code.toLowerCase(), name: m.home_team_name, code: m.home_team_code, iso: m.home_team_flag } as Team,
+          awayTeam: { id: m.away_team_code.toLowerCase(), name: m.away_team_name, code: m.away_team_code, iso: m.away_team_flag } as Team,
+          homeScore: m.home_score ?? undefined,
+          awayScore: m.away_score ?? undefined,
+          phase: m.phase as any,
+          group: m.group_name || undefined,
+          finished: m.finished
+        }));
+        setMatches(formatted);
+      }
+    } catch (err) {
+      console.error('Erro ao buscar partidas:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // Patch para restaurar o campo ISO caso os dados do localStorage estejam desatualizados
-    const patchedMatches = matches.map(match => {
-      let changed = false;
-      const homeTeam = { ...match.homeTeam };
-      const awayTeam = { ...match.awayTeam };
+    fetchMatches();
+  }, []);
 
-      if (!homeTeam.iso && homeTeam.id !== 'tbd') {
-        const master = teams.find(t => t.id === homeTeam.id || t.code === homeTeam.code);
-        if (master?.iso) { homeTeam.iso = master.iso; changed = true; }
+  const syncMatches = async (apiKey: string) => {
+    try {
+      console.log('Iniciando sincronização com API Key:', apiKey.substring(0, 5) + '...');
+      const apiResults = await fetchWorldCupResults(apiKey);
+      console.log(`Recebidos ${apiResults.length} jogos da API.`);
+      
+      for (const res of apiResults) {
+        const isFinished = ['FT', 'AET', 'PEN'].includes(res.fixture.status.short);
+        const matchDate = res.fixture.date ? res.fixture.date.split('T')[0] : new Date().toISOString().split('T')[0];
+        const matchTime = res.fixture.date ? res.fixture.date.split('T')[1].substring(0, 5) : '00:00';
+
+        const { error: upsertError } = await supabase
+          .from('matches')
+          .upsert({
+            external_id: res.fixture.id,
+            date: matchDate,
+            time: matchTime,
+            home_team_name: res.teams.home.name,
+            home_team_code: res.teams.home.name.substring(0, 3).toUpperCase(),
+            away_team_name: res.teams.away.name,
+            away_team_code: res.teams.away.name.substring(0, 3).toUpperCase(),
+            home_score: res.goals.home,
+            away_score: res.goals.away,
+            phase: 'group', 
+            finished: isFinished,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'external_id' });
+
+        if (upsertError) {
+          console.error(`Erro ao salvar jogo ${res.fixture.id}:`, upsertError);
+        }
       }
-      if (!awayTeam.iso && awayTeam.id !== 'tbd') {
-        const master = teams.find(t => t.id === awayTeam.id || t.code === awayTeam.code);
-        if (master?.iso) { awayTeam.iso = master.iso; changed = true; }
-      }
 
-      return changed ? { ...match, homeTeam, awayTeam } : match;
-    });
-
-    const hasChanges = patchedMatches.some((m, i) => m !== matches[i]);
-    if (hasChanges) setMatches(patchedMatches);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    localStorage.setItem('bolao_matches', JSON.stringify(matches));
-  }, [matches]);
-
-  const updateMatchScore = (matchId: string, homeScore: number, awayScore: number, finished: boolean) => {
-    setMatches(prev => prev.map(m => 
-      m.id === matchId 
-        ? { ...m, homeScore, awayScore, finished }
-        : m
-    ));
+      console.log('Sincronização concluída no Supabase. Recarregando estado local...');
+      await fetchMatches();
+    } catch (err: any) {
+      console.error('Erro detalhado na sincronização:', err);
+      throw err;
+    }
   };
 
-  const updateMatchTeams = (matchId: string, homeTeam: Team, awayTeam: Team) => {
-    setMatches(prev => prev.map(m => 
-      m.id === matchId ? { ...m, homeTeam, awayTeam } : m
-    ));
+  const updateMatchScore = async (matchId: string, homeScore: number, awayScore: number, finished: boolean) => {
+    const { error } = await supabase
+      .from('matches')
+      .update({ home_score: homeScore, away_score: awayScore, finished })
+      .eq('id', matchId);
+
+    if (error) throw error;
+    await fetchMatches();
   };
 
-  const updateMatchDetails = (matchId: string, updates: Partial<Match>) => {
-    setMatches(prev => prev.map(m => 
-      m.id === matchId ? { ...m, ...updates } : m
-    ));
+  const updateMatchTeams = async (matchId: string, homeTeam: Team, awayTeam: Team) => {
+    const { error } = await supabase
+      .from('matches')
+      .update({
+        home_team_name: homeTeam.name,
+        home_team_code: homeTeam.code,
+        home_team_flag: homeTeam.iso,
+        away_team_name: awayTeam.name,
+        away_team_code: awayTeam.code,
+        away_team_flag: awayTeam.iso
+      })
+      .eq('id', matchId);
+
+    if (error) throw error;
+    await fetchMatches();
   };
+
+  const getMatch = (id: string) => matches.find(m => m.id === id);
 
   const getGroupStandings = (group: string) => {
     const groupMatches = matches.filter(m => m.group === group && m.finished && m.homeScore !== undefined);
     const groupTeams = matches
       .filter(m => m.group === group)
       .flatMap(m => [m.homeTeam, m.awayTeam])
-      .filter((t, i, arr) => t.code !== 'TBD' && arr.findIndex(x => x.id === t.id) === i);
+      .filter((t, i, arr) => t.code !== 'TBD' && arr.findIndex(x => x.code === t.code) === i);
 
     const standings = groupTeams.map(team => {
       let pts = 0, w = 0, d = 0, l = 0, gf = 0, ga = 0;
-      
       groupMatches.forEach(match => {
-        if (match.homeTeam.id === team.id) {
-          gf += match.homeScore!;
-          ga += match.awayScore!;
+        if (match.homeTeam.code === team.code) {
+          gf += match.homeScore!; ga += match.awayScore!;
           if (match.homeScore! > match.awayScore!) { w++; pts += 3; }
           else if (match.homeScore! === match.awayScore!) { d++; pts += 1; }
-          else { l++; }
-        } else if (match.awayTeam.id === team.id) {
-          gf += match.awayScore!;
-          ga += match.homeScore!;
+          else l++;
+        } else if (match.awayTeam.code === team.code) {
+          gf += match.awayScore!; ga += match.homeScore!;
           if (match.awayScore! > match.homeScore!) { w++; pts += 3; }
           else if (match.awayScore! === match.homeScore!) { d++; pts += 1; }
-          else { l++; }
+          else l++;
         }
       });
-
       return { team, pts, w, d, l, gf, ga, gd: gf - ga };
     });
 
     return standings.sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
   };
 
-  const syncMatches = async (apiKey: string) => {
-    const lastSyncStr = localStorage.getItem('bolao_last_sync');
-    const now = Date.now();
-    
-    if (lastSyncStr) {
-      const diff = now - parseInt(lastSyncStr);
-      if (diff < 15 * 60 * 1000) {
-        const remaining = Math.ceil((15 * 60 * 1000 - diff) / 60000);
-        throw new Error(`Aguarde ${remaining} minutos para sincronizar novamente.`);
-      }
-    }
-
-    const apiResults = await fetchWorldCupResults(apiKey);
-    
-    setMatches(prev => prev.map(match => {
-      const apiMatch = apiResults.find(am => 
-        (match.externalId && am.fixture.id === match.externalId) ||
-        (am.teams.home.name.toLowerCase().includes(match.homeTeam.name.toLowerCase()) && 
-         am.teams.away.name.toLowerCase().includes(match.awayTeam.name.toLowerCase()))
-      );
-
-      if (apiMatch && apiMatch.goals.home !== null && apiMatch.goals.away !== null) {
-        const isFinished = ['FT', 'AET', 'PEN'].includes(apiMatch.fixture.status.short);
-        return {
-          ...match,
-          homeScore: apiMatch.goals.home,
-          awayScore: apiMatch.goals.away,
-          finished: isFinished,
-          externalId: apiMatch.fixture.id
-        };
-      }
-      return match;
-    }));
-
-    localStorage.setItem('bolao_last_sync', now.toString());
-  };
-
   return (
-    <MatchesContext.Provider value={{
-      matches,
-      updateMatchScore,
-      updateMatchTeams,
-      updateMatchDetails,
-      getGroupStandings,
-      syncMatches
-    }}>
+    <MatchesContext.Provider value={{ matches, isLoading, syncMatches, updateMatchScore, updateMatchTeams, getMatch, getGroupStandings }}>
       {children}
     </MatchesContext.Provider>
   );
@@ -160,8 +163,6 @@ export function MatchesProvider({ children }: { children: ReactNode }) {
 
 export function useMatches() {
   const context = useContext(MatchesContext);
-  if (context === undefined) {
-    throw new Error('useMatches must be used within a MatchesProvider');
-  }
+  if (context === undefined) throw new Error('useMatches must be used within a MatchesProvider');
   return context;
 }

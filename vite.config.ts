@@ -42,4 +42,16 @@ export default defineConfig({
       "@": path.resolve(__dirname, "src"),
     },
   },
+  server: {
+    proxy: {
+      '/api-football': {
+        target: 'https://v3.football.api-sports.io',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api-football/, ''),
+        headers: {
+          'Access-Control-Allow-Origin': '*'
+        }
+      }
+    }
+  }
 });

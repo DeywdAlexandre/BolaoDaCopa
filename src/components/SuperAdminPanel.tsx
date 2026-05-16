@@ -20,7 +20,7 @@ export function SuperAdminPanel() {
   const { authorizedManagers, addManager, updateManager, removeManager } = useManagers();
   const { pools } = usePools();
   const { bets, getBetsByPool } = useBets();
-  const { matches, updateMatchScore, updateMatchTeams, getGroupStandings, syncMatches } = useMatches();
+  const { matches, updateMatchScore, updateMatchTeams, getGroupStandings, syncMatches, seedMatches } = useMatches();
   const stats = useAdminStats();
 
   const { toast } = useToast();
@@ -106,7 +106,7 @@ export function SuperAdminPanel() {
 
         {activeTab === 'dashboard' && <DashboardTab stats={stats} />}
         {activeTab === 'managers' && <ManagersTab managers={authorizedManagers} pools={pools} bets={bets} newEmail={newManagerEmail} setNewEmail={setNewManagerEmail} newName={newManagerName} setNewName={setNewManagerName} newFee={newManagerFee} setNewFee={setNewManagerFee} showSuccess={showSuccess} onAdd={handleAddManager} onToggleBlock={async (m) => await updateManager(m.id, { blocked: !m.blocked })} onRemove={async (id, name) => { if (confirm(`Remover "${name}"?`)) await removeManager(id); }} editingManager={editingManager} setEditingManager={setEditingManager} editFee={editFee} setEditFee={setEditFee} onUpdateFee={handleUpdateFee} />}
-        {activeTab === 'results' && <ResultsTab matches={matches} onUpdateScore={updateMatchScore} onUpdateTeams={updateMatchTeams} getGroupStandings={getGroupStandings} onSync={handleSync} apiKey={apiKey} setApiKey={setApiKey} />}
+        {activeTab === 'results' && <ResultsTab matches={matches} onUpdateScore={updateMatchScore} onUpdateTeams={updateMatchTeams} getGroupStandings={getGroupStandings} onSync={handleSync} seedMatches={seedMatches} apiKey={apiKey} setApiKey={setApiKey} />}
         {activeTab === 'pools' && <PoolsTab pools={pools} matches={matches} managers={authorizedManagers} getBetsByPool={getBetsByPool} />}
         {activeTab === 'bets' && <BetsTab bets={bets} pools={pools} matches={matches} />}
         {activeTab === 'finances' && <FinancesTab stats={stats} managers={authorizedManagers} />}

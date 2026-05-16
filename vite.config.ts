@@ -44,10 +44,10 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api-football': {
+      '/api/football': {
         target: 'https://v3.football.api-sports.io',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api-football/, ''),
+        rewrite: (path) => path.replace(/^\/api\/football/, ''),
         headers: {
           'Access-Control-Allow-Origin': '*'
         }

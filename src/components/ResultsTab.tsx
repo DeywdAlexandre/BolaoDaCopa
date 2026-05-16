@@ -25,6 +25,7 @@ export function ResultsTab({ matches, onUpdateScore, onUpdateTeams, getGroupStan
   const friendlyMatches = matches.filter(m => m.phase === 'friendly');
   const hasFriendlies = friendlyMatches.length > 0;
   const [activePhase, setActivePhase] = useState(hasFriendlies ? 'friendlies' : 'groups');
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 // ... (resto da lógica de saveScore etc continua igual)
 
   const saveScore = (id: string, fin: boolean) => { onUpdateScore(id, parseInt(hScore), parseInt(aScore), fin); setEditingMatch(null); };
@@ -40,6 +41,11 @@ export function ResultsTab({ matches, onUpdateScore, onUpdateTeams, getGroupStan
     {id:'round32',label:'Fase 32'},{id:'round16',label:'Oitavas'},
     {id:'quarter',label:'Quartas'},{id:'semi',label:'Semi'},{id:'finals',label:'Finais'},
   ];
+
+  // Extrair datas únicas dos jogos para o filtro
+  const phaseMatches = matches.filter(m => m.phase === activePhase || (activePhase === 'finals' && ['third', 'final'].includes(m.phase)));
+  const uniqueDates = Array.from(new Set(phaseMatches.map(m => m.date))).sort();
+  const filteredMatches = selectedDate ? phaseMatches.filter(m => m.date === selectedDate) : phaseMatches;
 
   const renderMatchRow = (match: Match) => {
     const isTBD = match.homeTeam.code==='TBD';
@@ -143,13 +149,41 @@ export function ResultsTab({ matches, onUpdateScore, onUpdateTeams, getGroupStan
         {!apiKey && <p className="text-[10px] text-red-500 mt-2 text-right">⚠️ API Key obrigatória para o botão amarelo.</p>}
       </div>
 
-      <div className="flex gap-1 overflow-x-auto pb-2">
+      <div className="flex gap-1 overflow-x-auto pb-2 scrollbar-hide">
         {pTabs.map(p=>(
-          <button key={p.id} onClick={()=>setActivePhase(p.id)}
+          <button key={p.id} onClick={()=>{setActivePhase(p.id); setSelectedDate(null);}}
             className={`px-2 md:px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap ${activePhase===p.id?'bg-green-600 text-white':'bg-white text-gray-600 hover:bg-gray-50'}`}
           >{p.label}</button>
         ))}
       </div>
+
+      {activePhase !== 'standings' && uniqueDates.length > 0 && (
+        <div className="flex flex-col gap-2 p-3 bg-white/50 rounded-2xl border border-white/50 backdrop-blur-sm">
+          <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider pl-1">
+            <span>📅 Filtrar por dia</span>
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            <button 
+              onClick={() => setSelectedDate(null)}
+              className={`px-3 py-1 rounded-full text-xs font-bold transition-all whitespace-nowrap ${selectedDate === null ? 'bg-gray-800 text-white shadow-md' : 'bg-white text-gray-500 border border-gray-100 hover:bg-gray-50'}`}
+            >
+              Ver Tudo
+            </button>
+            {uniqueDates.map(date => {
+              const [y, m, d] = date.split('-');
+              return (
+                <button 
+                  key={date}
+                  onClick={() => setSelectedDate(date)}
+                  className={`px-3 py-1 rounded-full text-xs font-bold transition-all whitespace-nowrap ${selectedDate === date ? 'bg-gray-800 text-white shadow-md' : 'bg-white text-gray-500 border border-gray-100 hover:bg-gray-50'}`}
+                >
+                  {`${d}/${m}`}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Amistosos */}
       {activePhase==='friendlies'&& friendlyMatches.length > 0 && (
@@ -159,7 +193,7 @@ export function ResultsTab({ matches, onUpdateScore, onUpdateTeams, getGroupStan
             <h3 className="font-bold text-gray-600 text-sm">Amistosos Pré-Copa</h3>
             <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Não contam para classificação</span>
           </div>
-          <div className="space-y-2">{friendlyMatches.map(m=><div key={m.id}>{renderMatchRow(m)}</div>)}</div>
+          <div className="space-y-2">{filteredMatches.map(m=><div key={m.id}>{renderMatchRow(m)}</div>)}</div>
         </div>
       )}
 
@@ -197,7 +231,7 @@ export function ResultsTab({ matches, onUpdateScore, onUpdateTeams, getGroupStan
 
       {/* Grupos */}
       {activePhase==='groups'&&groups.map(g=>{
-        const gm=matches.filter(m=>m.group===g); if(!gm.length) return null;
+        const gm=filteredMatches.filter(m=>m.group===g); if(!gm.length) return null;
         return (
           <div key={g} className="card">
             <h3 className="font-bold text-gray-600 mb-3 text-sm">Grupo {g}</h3>
@@ -208,7 +242,7 @@ export function ResultsTab({ matches, onUpdateScore, onUpdateTeams, getGroupStan
 
       {/* Mata-Mata */}
       {kPhases.filter(p=>activePhase===p||(activePhase==='finals'&&(p==='third'||p==='final'))).map(phase=>{
-        const pm=matches.filter(m=>m.phase===phase); if(!pm.length) return null;
+        const pm=filteredMatches.filter(m=>m.phase===phase); if(!pm.length) return null;
         return (
           <div key={phase} className="card">
             <h3 className="font-bold text-gray-600 mb-3 text-sm">{getPhaseLabel(phase)}</h3>

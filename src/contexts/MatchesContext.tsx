@@ -105,7 +105,7 @@ export function MatchesProvider({ children }: { children: ReactNode }) {
       const initialMatches = generateInitialMatches();
       
       for (const m of initialMatches) {
-        await supabase
+        const { error: upsertError } = await supabase
           .from('matches')
           .upsert({
             external_id: m.external_id,
@@ -117,10 +117,17 @@ export function MatchesProvider({ children }: { children: ReactNode }) {
             away_team_name: m.awayTeam?.name,
             away_team_code: m.awayTeam?.code,
             away_team_flag: m.awayTeam?.iso,
+            home_score: null,
+            away_score: null,
             group: m.group,
             phase: m.phase,
-            finished: false
+            finished: false,
+            updated_at: new Date().toISOString()
           }, { onConflict: 'external_id' });
+
+        if (upsertError) {
+          console.error(`Erro ao salvar jogo ${m.external_id}:`, upsertError);
+        }
       }
 
       await fetchMatches();

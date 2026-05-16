@@ -37,12 +37,12 @@ export function MatchesProvider({ children }: { children: ReactNode }) {
           externalId: m.external_id,
           date: m.date,
           time: m.time,
-          homeTeam: { id: m.home_team_code.toLowerCase(), name: m.home_team_name, code: m.home_team_code, iso: m.home_team_flag } as Team,
-          awayTeam: { id: m.away_team_code.toLowerCase(), name: m.away_team_name, code: m.away_team_code, iso: m.away_team_flag } as Team,
-          homeScore: m.home_score ?? undefined,
-          awayScore: m.away_score ?? undefined,
+          homeTeam: { id: (m.home_team_code || 'TBD').toLowerCase(), name: m.home_team_name, code: m.home_team_code, iso: m.home_team_flag } as Team,
+          awayTeam: { id: (m.away_team_code || 'TBD').toLowerCase(), name: m.away_team_name, code: m.away_team_code, iso: m.away_team_flag } as Team,
+          homeScore: m.home_score !== null ? m.home_score : undefined,
+          awayScore: m.away_score !== null ? m.away_score : undefined,
           phase: m.phase as any,
-          group: m.group_name || undefined,
+          group: m.group || undefined,
           finished: m.finished
         }));
         setMatches(formatted);

@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { Match, Team } from '../types';
 import { fetchWorldCupResults } from '../services/apiFootball';
 import { supabase } from '../lib/supabase';
+import { generateInitialMatches } from '../data/seed2026';
 
 interface MatchesContextType {
   matches: Match[];

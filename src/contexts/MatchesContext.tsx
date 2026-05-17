@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { Match, Team } from '../types';
 import { fetchWorldCupResults } from '../services/apiFootball';
 import { supabase } from '../lib/supabase';
-import { generateInitialMatches } from '../data/seed2026';
+import { matches as staticMatches } from '../data/matches';
 
 interface MatchesContextType {
   matches: Match[];
@@ -11,11 +11,47 @@ interface MatchesContextType {
   seedMatches: () => Promise<void>;
   updateMatchScore: (matchId: string, homeScore: number, awayScore: number, finished: boolean) => Promise<void>;
   updateMatchTeams: (matchId: string, homeTeam: Team, awayTeam: Team) => Promise<void>;
+  updateMatchDetails: (
+    matchId: string,
+    homeScore: number | null,
+    awayScore: number | null,
+    finished: boolean,
+    date: string,
+    time: string,
+    stadium: string,
+    city: string
+  ) => Promise<void>;
+  createCustomMatch: (
+    homeTeamName: string,
+    homeTeamCode: string,
+    homeTeamFlag: string,
+    awayTeamName: string,
+    awayTeamCode: string,
+    awayTeamFlag: string,
+    date: string,
+    time: string,
+    stadium: string,
+    city: string
+  ) => Promise<void>;
+  deleteMatch: (matchId: string) => Promise<void>;
   getMatch: (id: string) => Match | undefined;
   getGroupStandings: (group: string) => { team: Team; pts: number; w: number; d: number; l: number; gf: number; ga: number; gd: number }[];
 }
 
 const MatchesContext = createContext<MatchesContextType | undefined>(undefined);
+
+function getFlagEmoji(countryCode: string): string {
+  if (!countryCode || countryCode === 'TBD' || countryCode.length !== 2) return '🏳️';
+  const codePoints = countryCode
+    .toUpperCase()
+    .split('')
+    .map(char => 127397 + char.charCodeAt(0));
+  try {
+    return String.fromCodePoint(...codePoints);
+  } catch {
+    return '🏳️';
+  }
+}
 
 export function MatchesProvider({ children }: { children: ReactNode }) {
   const [matches, setMatches] = useState<Match[]>([]);
@@ -37,10 +73,24 @@ export function MatchesProvider({ children }: { children: ReactNode }) {
           externalId: m.external_id,
           date: m.date,
           time: m.time,
-          homeTeam: { id: (m.home_team_code || 'TBD').toLowerCase(), name: m.home_team_name, code: m.home_team_code, iso: m.home_team_flag } as Team,
-          awayTeam: { id: (m.away_team_code || 'TBD').toLowerCase(), name: m.away_team_name, code: m.away_team_code, iso: m.away_team_flag } as Team,
+          homeTeam: { 
+            id: (m.home_team_code || 'TBD').toLowerCase(), 
+            name: m.home_team_name, 
+            code: m.home_team_code, 
+            iso: m.home_team_flag,
+            flag: getFlagEmoji(m.home_team_flag)
+          } as Team,
+          awayTeam: { 
+            id: (m.away_team_code || 'TBD').toLowerCase(), 
+            name: m.away_team_name, 
+            code: m.away_team_code, 
+            iso: m.away_team_flag,
+            flag: getFlagEmoji(m.away_team_flag)
+          } as Team,
           homeScore: m.home_score !== null ? m.home_score : undefined,
           awayScore: m.away_score !== null ? m.away_score : undefined,
+          stadium: m.stadium || '',
+          city: m.city || '',
           phase: m.phase as any,
           group: m.group || undefined,
           finished: m.finished
@@ -101,37 +151,74 @@ export function MatchesProvider({ children }: { children: ReactNode }) {
 
   const seedMatches = async () => {
     try {
-      console.log('Gerando tabela da Copa 2026...');
-      const initialMatches = generateInitialMatches();
+      console.log('Limpando tabela de partidas antiga no Supabase...');
+      const { error: deleteError } = await supabase
+        .from('matches')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+
+      if (deleteError) {
+        console.error('Erro ao limpar tabela de matches:', deleteError);
+        throw deleteError;
+      }
+
+      console.log('Gerando tabela da Copa 2026 realista e polida...');
       
-      for (const m of initialMatches) {
+      const getNumericExternalId = (id: string, index: number): number => {
+        if (id.startsWith('fr_')) {
+          return 1000 + parseInt(id.replace('fr_', ''));
+        } else if (id.startsWith('g')) {
+          const cleanId = id.replace('g', '').replace(/[a-z]/gi, '');
+          return 2000 + (parseInt(cleanId) || (index + 1));
+        } else if (id.startsWith('r32_')) {
+          return 3000 + parseInt(id.replace('r32_', ''));
+        } else if (id.startsWith('r16_')) {
+          return 4000 + parseInt(id.replace('r16_', ''));
+        } else if (id.startsWith('qf_')) {
+          return 5000 + parseInt(id.replace('qf_', ''));
+        } else if (id.startsWith('sf_')) {
+          return 6000 + parseInt(id.replace('sf_', ''));
+        } else if (id === 'third') {
+          return 7000;
+        } else if (id === 'final') {
+          return 8000;
+        }
+        return 9000 + index;
+      };
+
+      for (let i = 0; i < staticMatches.length; i++) {
+        const m = staticMatches[i];
+        const extId = getNumericExternalId(m.id, i);
+
         const { error: upsertError } = await supabase
           .from('matches')
           .upsert({
-            external_id: m.external_id,
+            external_id: extId,
             date: m.date,
             time: m.time,
-            home_team_name: m.homeTeam?.name,
-            home_team_code: m.homeTeam?.code,
-            home_team_flag: m.homeTeam?.iso,
-            away_team_name: m.awayTeam?.name,
-            away_team_code: m.awayTeam?.code,
-            away_team_flag: m.awayTeam?.iso,
+            home_team_name: m.homeTeam.name,
+            home_team_code: m.homeTeam.code,
+            home_team_flag: m.homeTeam.iso || '',
+            away_team_name: m.awayTeam.name,
+            away_team_code: m.awayTeam.code,
+            away_team_flag: m.awayTeam.iso || '',
+            stadium: m.stadium || '',
+            city: m.city || '',
             home_score: null,
             away_score: null,
-            group: m.group,
+            group: m.group || null,
             phase: m.phase,
             finished: false,
             updated_at: new Date().toISOString()
           }, { onConflict: 'external_id' });
 
         if (upsertError) {
-          console.error(`Erro ao salvar jogo ${m.external_id}:`, upsertError);
+          console.error(`Erro ao salvar jogo ${m.id} (ext: ${extId}):`, upsertError);
         }
       }
 
       await fetchMatches();
-      console.log('Tabela gerada com sucesso!');
+      console.log('Tabela da Copa 2026 semeada com absoluto sucesso!');
     } catch (err) {
       console.error('Erro ao gerar tabela:', err);
       throw err;
@@ -142,6 +229,33 @@ export function MatchesProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase
       .from('matches')
       .update({ home_score: homeScore, away_score: awayScore, finished })
+      .eq('id', matchId);
+
+    if (error) throw error;
+    await fetchMatches();
+  };
+
+  const updateMatchDetails = async (
+    matchId: string,
+    homeScore: number | null,
+    awayScore: number | null,
+    finished: boolean,
+    date: string,
+    time: string,
+    stadium: string,
+    city: string
+  ) => {
+    const { error } = await supabase
+      .from('matches')
+      .update({
+        home_score: homeScore,
+        away_score: awayScore,
+        finished,
+        date,
+        time,
+        stadium,
+        city
+      })
       .eq('id', matchId);
 
     if (error) throw error;
@@ -159,6 +273,51 @@ export function MatchesProvider({ children }: { children: ReactNode }) {
         away_team_code: awayTeam.code,
         away_team_flag: awayTeam.iso
       })
+      .eq('id', matchId);
+
+    if (error) throw error;
+    await fetchMatches();
+  };
+
+  const createCustomMatch = async (
+    homeTeamName: string,
+    homeTeamCode: string,
+    homeTeamFlag: string,
+    awayTeamName: string,
+    awayTeamCode: string,
+    awayTeamFlag: string,
+    date: string,
+    time: string,
+    stadium: string,
+    city: string
+  ) => {
+    const id = crypto.randomUUID();
+    const { error } = await supabase
+      .from('matches')
+      .insert({
+        id,
+        date,
+        time,
+        home_team_name: homeTeamName,
+        home_team_code: homeTeamCode.toUpperCase(),
+        home_team_flag: homeTeamFlag.toLowerCase(),
+        away_team_name: awayTeamName,
+        away_team_code: awayTeamCode.toUpperCase(),
+        away_team_flag: awayTeamFlag.toLowerCase(),
+        stadium,
+        city,
+        phase: 'custom',
+        finished: false
+      });
+
+    if (error) throw error;
+    await fetchMatches();
+  };
+
+  const deleteMatch = async (matchId: string) => {
+    const { error } = await supabase
+      .from('matches')
+      .delete()
       .eq('id', matchId);
 
     if (error) throw error;
@@ -196,7 +355,7 @@ export function MatchesProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <MatchesContext.Provider value={{ matches, isLoading, syncMatches, seedMatches, updateMatchScore, updateMatchTeams, getMatch, getGroupStandings }}>
+    <MatchesContext.Provider value={{ matches, isLoading, syncMatches, seedMatches, updateMatchScore, updateMatchDetails, updateMatchTeams, createCustomMatch, deleteMatch, getMatch, getGroupStandings }}>
       {children}
     </MatchesContext.Provider>
   );

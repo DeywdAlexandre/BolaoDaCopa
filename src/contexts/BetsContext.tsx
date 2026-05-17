@@ -40,6 +40,7 @@ export function BetsProvider({ children }: { children: ReactNode }) {
         const formatted: Bet[] = data.map(b => ({
           id: b.id,
           poolId: b.pool_id,
+          matchId: b.match_id,
           userId: b.user_id,
           userName: b.user_name,
           userPhone: b.user_phone || undefined,
@@ -79,11 +80,12 @@ export function BetsProvider({ children }: { children: ReactNode }) {
       .from('bets')
       .insert({
         pool_id: betData.poolId,
+        match_id: betData.matchId,
         user_id: betData.userId,
         user_name: betData.userName,
         user_phone: betData.userPhone,
         home_score: betData.homeScore,
-        away_score: betData.away_score,
+        away_score: betData.awayScore,
         is_manual_bet: betData.isManualBet,
         validated: betData.validated
       });

@@ -59,13 +59,13 @@ export function LoginPage() {
           Seus dados estão seguros. Usamos apenas seu email para identificação.
         </p>
 
-        {/* Demo Info */}
-        <div className="mt-6 p-4 bg-blue-50 rounded-xl text-left">
-          <p className="text-xs font-semibold text-blue-700 mb-2">🎮 Modo Demonstração:</p>
-          <ul className="text-xs text-blue-600 space-y-1">
-            <li>• <strong>deywd12@gmail.com</strong> - Super Admin</li>
-            <li>• Gerencie autorizando gerentes</li>
-            <li>• <strong>Qualquer email</strong> - Usuário</li>
+        {/* Info Acesso Real */}
+        <div className="mt-6 p-4 bg-blue-50/50 border border-blue-100 rounded-xl text-left">
+          <p className="text-xs font-semibold text-blue-700 mb-2">ℹ️ Como funciona o acesso:</p>
+          <ul className="text-xs text-blue-600 space-y-1.5">
+            <li>👑 <strong>Super Admin:</strong> Entre usando a conta Google correspondente ao email principal.</li>
+            <li>👔 <strong>Gerentes:</strong> Devem ser previamente autorizados pelo painel do Admin para poder criar seus próprios bolões.</li>
+            <li>👥 <strong>Participantes:</strong> Qualquer conta Google pode fazer login para entrar nos bolões e começar a palpitar!</li>
           </ul>
         </div>
       </div>

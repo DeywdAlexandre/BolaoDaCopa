@@ -1,131 +1,154 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
-import { User, UserRole, AuthorizedManager } from '../types';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { User, UserRole } from '../types';
+import { supabase } from '../lib/supabase';
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
-  login: () => void;
-  logout: () => void;
+  login: () => Promise<void>;
+  logout: () => Promise<void>;
   updateUserRole: (role: UserRole, managerId?: string) => void;
-  updateUserName: (name: string) => void;
+  updateUserName: (name: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const SUPER_ADMIN_EMAIL = 'deywd12@gmail.com';
 
-// Simula alguns usuários do Google para teste
-const mockGoogleUsers = [
-  { email: 'deywd12@gmail.com', name: 'David (Super Admin)', photoURL: '' },
-  { email: 'gerente@teste.com', name: 'João Gerente', photoURL: '' },
-  { email: 'usuario@teste.com', name: 'Maria Usuária', photoURL: '' },
-];
-
-// Carregar user do localStorage de forma síncrona
-function loadUser(): User | null {
-  try {
-    const saved = localStorage.getItem('bolao_user');
-    if (saved) return JSON.parse(saved);
-  } catch { /* ignore */ }
-  return null;
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(loadUser);
-  const [isLoading] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const login = () => {
-    // Simula popup do Google - mostra uma lista de usuários para escolher
-    const emailInput = prompt(
-      '🔐 Simular Login com Google\n\n' +
-      'Digite um email para simular login:\n\n' +
-      '👑 deywd12@gmail.com (Super Admin)\n' +
-      '👔 gerente@teste.com (Gerente de teste)\n' +
-      '👤 Qualquer outro email (Usuário)\n\n' +
-      'Seu email:'
-    );
+  const handleUserSession = async (supabaseUser: any) => {
+    try {
+      const email = supabaseUser.email || '';
+      let role: UserRole = 'user';
+      let managerId: string | undefined = undefined;
 
-    if (!emailInput) return;
+      if (email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
+        role = 'super_admin';
+      } else {
+        // Consultar a tabela authorized_managers para verificar se o email é um gerente ativo
+        const { data: managerData, error } = await supabase
+          .from('authorized_managers')
+          .select('id, blocked')
+          .eq('email', email.toLowerCase())
+          .maybeSingle();
 
-    const email = emailInput.trim().toLowerCase();
-    const mockUser = mockGoogleUsers.find(u => u.email === email);
-    
-    // Verificar se é gerente autorizado
-    const authorizedManagers: AuthorizedManager[] = JSON.parse(
-      localStorage.getItem('bolao_managers') || '[]'
-    );
-    const isManager = authorizedManagers.some(m => m.email === email);
-    
-    // Determinar role
-    let role: UserRole = 'user';
-    if (email === SUPER_ADMIN_EMAIL) {
-      role = 'super_admin';
-    } else if (isManager) {
-      role = 'manager';
-    }
+        if (error) {
+          console.error('Erro ao verificar status de gerente:', error);
+        } else if (managerData) {
+          if (managerData.blocked) {
+            console.warn('Gerente bloqueado:', email);
+          } else {
+            role = 'manager';
+            managerId = managerData.id;
+          }
+        }
+      }
 
-    // Verificar se usuário já existe (manter mesmo ID)
-    const users: User[] = JSON.parse(localStorage.getItem('bolao_users') || '[]');
-    const existingUser = users.find(u => u.email === email);
-    
-    const finalUser: User = existingUser 
-      ? { ...existingUser, role, name: existingUser.name || mockUser?.name || email.split('@')[0] }
-      : {
-          id: `user_${email.replace(/[^a-z0-9]/gi, '_')}`,
-          email,
-          name: mockUser?.name || email.split('@')[0],
-          photoURL: mockUser?.photoURL,
-          role,
-          createdAt: new Date().toISOString()
-        };
+      // Carregar código do gerente seguido localmente para usuários comuns
+      const savedManagerCode = localStorage.getItem('bolao_followed_manager_code');
 
-    // Salvar no localStorage
-    localStorage.setItem('bolao_user', JSON.stringify(finalUser));
-    setUser(finalUser);
-    
-    // Atualizar lista de usuários
-    if (existingUser) {
-      const updatedUsers = users.map(u => u.email === email ? finalUser : u);
-      localStorage.setItem('bolao_users', JSON.stringify(updatedUsers));
-    } else {
-      localStorage.setItem('bolao_users', JSON.stringify([...users, finalUser]));
+      const finalUser: User = {
+        id: supabaseUser.id,
+        email,
+        name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || email.split('@')[0],
+        photoURL: supabaseUser.user_metadata?.avatar_url || supabaseUser.user_metadata?.picture || '',
+        role,
+        managerId: role === 'manager' ? managerId : (savedManagerCode || undefined),
+        createdAt: supabaseUser.created_at || new Date().toISOString()
+      };
+
+      setUser(finalUser);
+    } catch (err) {
+      console.error('Erro ao tratar sessão de usuário:', err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('bolao_user');
-    setUser(null);
+  useEffect(() => {
+    // 1. Checar sessão atual
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          await handleUserSession(session.user);
+        } else {
+          setUser(null);
+          setIsLoading(false);
+        }
+      } catch (err) {
+        console.error('Erro ao obter sessão inicial:', err);
+        setUser(null);
+        setIsLoading(false);
+      }
+    };
+
+    checkSession();
+
+    // 2. Ouvir mudanças no estado de auth
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('onAuthStateChange:', event, session?.user?.email);
+        if (session?.user) {
+          await handleUserSession(session.user);
+        } else {
+          setUser(null);
+          setIsLoading(false);
+        }
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const login = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Erro no login com Google:', err.message);
+      alert('Erro ao iniciar login com Google: ' + err.message);
+    }
+  };
+
+  const logout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      setUser(null);
+    } catch (err: any) {
+      console.error('Erro ao deslogar:', err.message);
+    }
   };
 
   const updateUserRole = (role: UserRole, managerId?: string) => {
     if (!user) return;
-    
-    const updatedUser = { ...user, role, managerId };
-    setUser(updatedUser);
-    localStorage.setItem('bolao_user', JSON.stringify(updatedUser));
-    
-    // Atualizar na lista de usuários
-    const users: User[] = JSON.parse(localStorage.getItem('bolao_users') || '[]');
-    const index = users.findIndex(u => u.id === user.id);
-    if (index >= 0) {
-      users[index] = updatedUser;
-      localStorage.setItem('bolao_users', JSON.stringify(users));
-    }
+    setUser({ ...user, role, managerId });
   };
 
-  const updateUserName = (name: string) => {
+  const updateUserName = async (name: string) => {
     if (!user || !name.trim()) return;
-    
-    const updatedUser = { ...user, name: name.trim() };
-    setUser(updatedUser);
-    localStorage.setItem('bolao_user', JSON.stringify(updatedUser));
-    
-    // Atualizar na lista de usuários
-    const users: User[] = JSON.parse(localStorage.getItem('bolao_users') || '[]');
-    const index = users.findIndex(u => u.id === user.id);
-    if (index >= 0) {
-      users[index] = updatedUser;
-      localStorage.setItem('bolao_users', JSON.stringify(users));
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: { full_name: name.trim() }
+      });
+      if (error) throw error;
+      
+      setUser({ ...user, name: name.trim() });
+    } catch (err: any) {
+      console.error('Erro ao atualizar nome:', err.message);
+      alert('Erro ao atualizar nome: ' + err.message);
     }
   };
 

@@ -74,18 +74,18 @@ export const generateInitialMatches = (): Partial<Match>[] => {
     
     // Rodada 1
     const d1 = new Date(startDate); d1.setDate(startDate.getDate() + (idx % 3));
-    matches.push({ external_id: baseId + 1, homeTeam: teams[0], awayTeam: teams[1], date: d1.toISOString().split('T')[0], time: '13:00', group, phase: 'group', finished: false });
-    matches.push({ external_id: baseId + 2, homeTeam: teams[2], awayTeam: teams[3], date: d1.toISOString().split('T')[0], time: '16:00', group, phase: 'group', finished: false });
+    matches.push({ externalId: baseId + 1, homeTeam: teams[0], awayTeam: teams[1], date: d1.toISOString().split('T')[0], time: '13:00', group, phase: 'group', finished: false });
+    matches.push({ externalId: baseId + 2, homeTeam: teams[2], awayTeam: teams[3], date: d1.toISOString().split('T')[0], time: '16:00', group, phase: 'group', finished: false });
 
     // Rodada 2
     const d2 = new Date(startDate); d2.setDate(startDate.getDate() + 5 + (idx % 3));
-    matches.push({ external_id: baseId + 3, homeTeam: teams[0], awayTeam: teams[2], date: d2.toISOString().split('T')[0], time: '16:00', group, phase: 'group', finished: false });
-    matches.push({ external_id: baseId + 4, homeTeam: teams[1], awayTeam: teams[3], date: d2.toISOString().split('T')[0], time: '19:00', group, phase: 'group', finished: false });
+    matches.push({ externalId: baseId + 3, homeTeam: teams[0], awayTeam: teams[2], date: d2.toISOString().split('T')[0], time: '16:00', group, phase: 'group', finished: false });
+    matches.push({ externalId: baseId + 4, homeTeam: teams[1], awayTeam: teams[3], date: d2.toISOString().split('T')[0], time: '19:00', group, phase: 'group', finished: false });
 
     // Rodada 3
     const d3 = new Date(startDate); d3.setDate(startDate.getDate() + 10 + (idx % 3));
-    matches.push({ external_id: baseId + 5, homeTeam: teams[3], awayTeam: teams[0], date: d3.toISOString().split('T')[0], time: '15:00', group, phase: 'group', finished: false });
-    matches.push({ external_id: baseId + 6, homeTeam: teams[1], awayTeam: teams[2], date: d3.toISOString().split('T')[0], time: '15:00', group, phase: 'group', finished: false });
+    matches.push({ externalId: baseId + 5, homeTeam: teams[3], awayTeam: teams[0], date: d3.toISOString().split('T')[0], time: '15:00', group, phase: 'group', finished: false });
+    matches.push({ externalId: baseId + 6, homeTeam: teams[1], awayTeam: teams[2], date: d3.toISOString().split('T')[0], time: '15:00', group, phase: 'group', finished: false });
   });
 
   return matches;

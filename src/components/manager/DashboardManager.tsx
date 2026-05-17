@@ -10,7 +10,7 @@ export function DashboardManager({ pools, getBetsByPool }: {
   const openPools = pools.filter(p => p.status === 'open').length;
   const finishedPools = pools.filter(p => p.status === 'finished').length;
 
-  const { totalBets, validatedBets, totalCollected, totalManagerFee, totalPrizeDist, netProfit, totalWinners } = stats;
+  const { totalBets, validatedBets, totalCollected, totalPrizeDist, netProfit, totalWinners } = stats;
 
   return (
     <div className="space-y-4">
@@ -67,7 +67,6 @@ export function DashboardManager({ pools, getBetsByPool }: {
             </h3>
             <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
               {allPending.map(bet => {
-                const pMatch = pools.find(p => p.id === bet.poolId); // Not strictly needed if we have pool
                 const handlePoke = () => {
                   const msg = `Olá ${bet.userName}! Vi seu palpite de ${bet.homeScore}x${bet.awayScore} no Bolão, mas ainda não confirmamos o pagamento. Posso validar para você?`;
                   const phone = bet.userPhone?.replace(/\D/g, '');

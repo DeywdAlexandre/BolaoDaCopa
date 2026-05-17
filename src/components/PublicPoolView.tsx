@@ -18,7 +18,7 @@ export function PublicPoolView({ poolId, onBack }: { poolId: string; onBack: () 
   const bets = getBetsByPool(poolId);
   const validatedBets = bets.filter(b => b.validated);
 
-  if (!pool || !match) {
+  if (!pool || !match || !stats) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="card max-w-md w-full text-center">

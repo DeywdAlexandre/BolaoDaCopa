@@ -43,7 +43,8 @@ export function ManagersProvider({ children }: { children: ReactNode }) {
           name: m.name,
           panelName: m.panel_name,
           code: m.manager_code,
-          platformFee: 3, // Poderia ser campo no banco
+          platformFee: m.platform_fee ? parseFloat(m.platform_fee) : 3,
+          blocked: m.blocked || false,
           authorizedAt: m.created_at,
           authorizedBy: 'super_admin'
         }));
@@ -68,7 +69,9 @@ export function ManagersProvider({ children }: { children: ReactNode }) {
         email: email.toLowerCase(),
         name,
         manager_code: code,
-        panel_name: `Bolão de ${name}`
+        panel_name: `Bolão de ${name}`,
+        platform_fee: platformFee,
+        blocked: false
       });
 
     if (error) throw error;
@@ -77,13 +80,16 @@ export function ManagersProvider({ children }: { children: ReactNode }) {
   };
 
   const updateManager = async (id: string, updates: Partial<AuthorizedManager>) => {
+    const fieldsToUpdate: any = {};
+    if (updates.name !== undefined) fieldsToUpdate.name = updates.name;
+    if (updates.panelName !== undefined) fieldsToUpdate.panel_name = updates.panelName;
+    if (updates.email !== undefined) fieldsToUpdate.email = updates.email;
+    if (updates.platformFee !== undefined) fieldsToUpdate.platform_fee = updates.platformFee;
+    if (updates.blocked !== undefined) fieldsToUpdate.blocked = updates.blocked;
+
     const { error } = await supabase
       .from('authorized_managers')
-      .update({
-        name: updates.name,
-        panel_name: updates.panelName,
-        email: updates.email
-      })
+      .update(fieldsToUpdate)
       .eq('id', id);
 
     if (error) throw error;

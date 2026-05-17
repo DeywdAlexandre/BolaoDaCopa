@@ -30,7 +30,7 @@ export interface Match {
   time: string;
   stadium: string;
   city: string;
-  phase: 'friendly' | 'group' | 'round32' | 'round16' | 'quarter' | 'semi' | 'third' | 'final';
+  phase: 'custom' | 'friendly' | 'group' | 'round32' | 'round16' | 'quarter' | 'semi' | 'third' | 'final';
   group?: string;
   homeScore?: number;
   awayScore?: number;

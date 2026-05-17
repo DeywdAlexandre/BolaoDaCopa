@@ -9,8 +9,8 @@ export function BetsList({
   getMatch: (id: string) => Match | undefined;
   getBetsByPool: (poolId: string) => Bet[];
   onValidate: (betId: string, validated: boolean) => void;
-  onCancel: (betId: string) => { success: boolean; message: string };
-  createManualBet: (bet: { poolId: string; matchId: string; userName: string; userPhone: string; homeScore: number; awayScore: number; validated: boolean }) => { success: boolean; message: string };
+  onCancel: (betId: string) => Promise<{ success: boolean; message: string }>;
+  createManualBet: (bet: { poolId: string; matchId: string; userName: string; userPhone: string; homeScore: number; awayScore: number; validated: boolean }) => Promise<{ success: boolean; message: string }>;
 }) {
   const [selectedPool, setSelectedPool] = useState('');
   const [showManualForm, setShowManualForm] = useState(false);
@@ -26,15 +26,15 @@ export function BetsList({
   const totalAllBets = pools.reduce((sum, pool) => sum + getBetsByPool(pool.id).length, 0);
   const pendingBets = pools.reduce((sum, pool) => sum + getBetsByPool(pool.id).filter(b => !b.validated).length, 0);
 
-  const handleCreateManualBet = () => {
+  const handleCreateManualBet = async () => {
     if (!selectedPool || !selectedPoolData || !manualName.trim() || !manualPhone.trim()) { toast('Preencha nome e telefone', 'warning'); return; }
-    const result = createManualBet({ poolId: selectedPool, matchId: selectedPoolData.matchId, userName: manualName.trim(), userPhone: manualPhone.trim(), homeScore: parseInt(manualHome), awayScore: parseInt(manualAway), validated: false });
+    const result = await createManualBet({ poolId: selectedPool, matchId: selectedPoolData.matchId, userName: manualName.trim(), userPhone: manualPhone.trim(), homeScore: parseInt(manualHome), awayScore: parseInt(manualAway), validated: false });
     if (result.success) { setManualName(''); setManualPhone(''); setManualHome('0'); setManualAway('0'); setShowManualForm(false); toast('Palpite manual criado!', 'success'); }
     else toast(result.message, 'error');
   };
 
-  const handleCancelBet = (betId: string, userName: string) => {
-    if (confirm(`Cancelar palpite de "${userName}"?`)) { const r = onCancel(betId); if (!r.success) toast(r.message, 'error'); else toast('Palpite cancelado', 'info'); }
+  const handleCancelBet = async (betId: string, userName: string) => {
+    if (confirm(`Cancelar palpite de "${userName}"?`)) { const r = await onCancel(betId); if (!r.success) toast(r.message, 'error'); else toast('Palpite cancelado', 'info'); }
   };
 
   return (

@@ -14,7 +14,7 @@ type Tab = 'dashboard' | 'pools' | 'create' | 'bets';
 
 export function ManagerPanel() {
   const { user, logout } = useAuth();
-  const { authorizedManagers } = useManagers();
+  const { authorizedManagers, updateManager } = useManagers();
   const { matches } = useMatches();
   const { pools, createPool, updatePool, deletePool } = usePools();
   const { getBetsByPool, validateBet, cancelBet, createManualBet, finishPool } = useBets();
@@ -167,7 +167,7 @@ export function ManagerPanel() {
         {activeTab === 'dashboard' && <DashboardManager pools={managerPools} getBetsByPool={getBetsByPool} />}
         {activeTab === 'pools' && <PoolsList pools={managerPools} getMatch={getMatch} onClose={async (id) => { if (confirm('Fechar bolão para novos palpites?')) { await updatePool(id, { status: 'closed' }); toast('Bolão fechado', 'info'); } }} onFinish={async (id) => { if (confirm('Finalizar e calcular vencedores?')) { await finishPool(id); toast('Bolão finalizado!', 'success'); } }} onDelete={async (id) => { const r = await deletePool(id); if (!r.success) toast(r.message, 'error'); else toast('Bolão excluído', 'info'); }} onReopen={async (id) => await updatePool(id, { status: 'open' })} getBetsByPool={getBetsByPool} />}
         {activeTab === 'create' && <CreatePoolForm matches={matches.filter(m => !m.finished && m.homeTeam.code !== 'TBD')} selectedMatch={selectedMatch} setSelectedMatch={setSelectedMatch} betValue={betValue} setBetValue={setBetValue} maxRepeated={maxRepeated} setMaxRepeated={setMaxRepeated} includeExtraTime={includeExtraTime} setIncludeExtraTime={setIncludeExtraTime} maintenanceFee={maintenanceFee} setMaintenanceFee={setMaintenanceFee} bonusAmount={bonusAmount} setBonusAmount={setBonusAmount} bettingDeadline={bettingDeadline} setBettingDeadline={setBettingDeadline} onCreate={handleCreatePool} existingPools={managerPools} isBlocked={isBlocked} />}
-        {activeTab === 'bets' && <BetsList pools={managerPools} getMatch={getMatch} getBetsByPool={getBetsByPool} onValidate={async (id, val) => await validateBet(id, val)} onCancel={async (id) => { if (confirm('Cancelar este palpite?')) await cancelBet(id); }} createManualBet={async (data) => await createManualBet(data)} />}
+        {activeTab === 'bets' && <BetsList pools={managerPools} getMatch={getMatch} getBetsByPool={getBetsByPool} onValidate={validateBet} onCancel={cancelBet} createManualBet={createManualBet} />}
       </div>
     </div>
   );

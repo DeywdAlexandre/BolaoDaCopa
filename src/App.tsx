@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ManagersProvider, useManagers } from './contexts/ManagersContext';
 import { MatchesProvider } from './contexts/MatchesContext';
@@ -14,11 +15,18 @@ function AppContent() {
   const { user, isLoading } = useAuth();
   const { authorizedManagers } = useManagers();
 
-  const params = new URLSearchParams(window.location.search);
-  const viewPoolId = params.get('view-pool');
+  const [activePoolId, setActivePoolId] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('view-pool');
+  });
 
-  if (viewPoolId) {
-    return <PublicPoolView poolId={viewPoolId} onBack={() => window.history.replaceState({}, '', window.location.pathname)} />;
+  const handleBack = () => {
+    window.history.replaceState({}, '', window.location.pathname);
+    setActivePoolId(null);
+  };
+
+  if (activePoolId) {
+    return <PublicPoolView poolId={activePoolId} onBack={handleBack} />;
   }
 
   if (isLoading) {

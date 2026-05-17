@@ -5,7 +5,8 @@ export function CreatePoolForm({
   matches, selectedMatch, setSelectedMatch, betValue, setBetValue,
   maxRepeated, setMaxRepeated, includeExtraTime, setIncludeExtraTime,
   maintenanceFee, setMaintenanceFee, bonusAmount, setBonusAmount,
-  bettingDeadline, setBettingDeadline, onCreate, existingPools, isBlocked
+  bettingDeadline, setBettingDeadline, onCreate, existingPools, isBlocked,
+  isCreating
 }: {
   matches: Match[]; selectedMatch: string; setSelectedMatch: (v: string) => void;
   betValue: string; setBetValue: (v: string) => void;
@@ -15,6 +16,7 @@ export function CreatePoolForm({
   bonusAmount: string; setBonusAmount: (v: string) => void;
   bettingDeadline: string; setBettingDeadline: (v: string) => void;
   onCreate: () => void; existingPools: Pool[]; isBlocked: boolean;
+  isCreating?: boolean;
 }) {
   const groupedMatches = matches.reduce((acc, match) => {
     const label = match.group ? `Grupo ${match.group}` : getPhaseLabel(match.phase);
@@ -75,7 +77,13 @@ export function CreatePoolForm({
               <input type="checkbox" id="extraTime" checked={includeExtraTime} onChange={(e) => setIncludeExtraTime(e.target.checked)} className="w-5 h-5 text-green-600 rounded" />
               <label htmlFor="extraTime" className="text-gray-700"><span className="font-semibold">⏱️ Incluir Prorrogação</span><p className="text-sm text-gray-500">Placar da prorrogação conta (pênaltis nunca)</p></label>
             </div>
-            <button onClick={onCreate} className="btn-primary w-full text-lg">🎯 Criar Bolão</button>
+            <button 
+              onClick={onCreate} 
+              disabled={isCreating}
+              className={`btn-primary w-full text-lg ${isCreating ? 'opacity-50 cursor-not-allowed hover:bg-green-600' : ''}`}
+            >
+              {isCreating ? '⚙️ Criando Bolão...' : '🎯 Criar Bolão'}
+            </button>
           </>
         )}
       </div>

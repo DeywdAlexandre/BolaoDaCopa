@@ -7,10 +7,10 @@ import { usePoolStats } from '../hooks/usePoolStats';
 import { TeamFlag } from './shared/TeamFlag';
 
 export function PublicPoolView({ poolId, onBack }: { poolId: string; onBack: () => void }) {
-  const { pools } = usePools();
-  const { matches } = useMatches();
+  const { pools, isLoading: isPoolsLoading } = usePools();
+  const { matches, isLoading: isMatchesLoading } = useMatches();
   const { getBetsByPool, createBet } = useBets();
-  const { getManagerByCode } = useManagers();
+  const { getManagerByCode, isLoading: isManagersLoading } = useManagers();
 
   const pool = pools.find(p => p.id === poolId);
   const match = matches.find(m => m.id === pool?.matchId);
@@ -26,6 +26,18 @@ export function PublicPoolView({ poolId, onBack }: { poolId: string; onBack: () 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successBetDetails, setSuccessBetDetails] = useState<{ name: string; phone: string; score: string } | null>(null);
+
+  if (isPoolsLoading || isMatchesLoading || isManagersLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-emerald-800">
+        <div className="text-center text-white">
+          <div className="text-6xl animate-bounce mb-4">⚽</div>
+          <p className="font-semibold text-lg animate-pulse">Buscando dados do bolão...</p>
+          <p className="text-xs text-white/60 mt-1">Carregando informações do servidor</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!pool || !match || !stats) {
     return (

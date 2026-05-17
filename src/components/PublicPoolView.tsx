@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { usePools } from '../contexts/PoolsContext';
 import { useMatches } from '../contexts/MatchesContext';
 import { useBets } from '../contexts/BetsContext';
@@ -8,7 +9,7 @@ import { TeamFlag } from './shared/TeamFlag';
 export function PublicPoolView({ poolId, onBack }: { poolId: string; onBack: () => void }) {
   const { pools } = usePools();
   const { matches } = useMatches();
-  const { getBetsByPool } = useBets();
+  const { getBetsByPool, createBet } = useBets();
   const { getManagerByCode } = useManagers();
 
   const pool = pools.find(p => p.id === poolId);
@@ -17,6 +18,14 @@ export function PublicPoolView({ poolId, onBack }: { poolId: string; onBack: () 
   const stats = usePoolStats(pool);
   const bets = getBetsByPool(poolId);
   const validatedBets = bets.filter(b => b.validated);
+
+  const [anonName, setAnonName] = useState('');
+  const [anonPhone, setAnonPhone] = useState('');
+  const [anonHomeScore, setAnonHomeScore] = useState('');
+  const [anonAwayScore, setAnonAwayScore] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successBetDetails, setSuccessBetDetails] = useState<{ name: string; phone: string; score: string } | null>(null);
 
   if (!pool || !match || !stats) {
     return (
@@ -33,6 +42,82 @@ export function PublicPoolView({ poolId, onBack }: { poolId: string; onBack: () 
 
   const statusLabels = { open: 'Aberto', closed: 'Fechado', finished: 'Finalizado' };
   const statusColors = { open: 'bg-green-100 text-green-700', closed: 'bg-yellow-100 text-yellow-700', finished: 'bg-gray-100 text-gray-700' };
+
+  const handleAnonBetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!anonName.trim() || !anonPhone.trim() || anonHomeScore === '' || anonAwayScore === '') {
+      alert('Por favor, preencha todos os campos.');
+      return;
+    }
+
+    const homeGols = parseInt(anonHomeScore);
+    const awayGols = parseInt(anonAwayScore);
+
+    // Validação de limite no frontend (para garantia visual e feedback imediato)
+    const scoreKey = `${homeGols}x${awayGols}`;
+    const scoreCount = validatedBets.filter(b => `${b.homeScore}x${b.awayScore}` === scoreKey).length;
+    if (scoreCount >= pool.maxRepeatedBets) {
+      alert(`O placar ${homeGols}x${awayGols} já atingiu o limite de ${pool.maxRepeatedBets} palpites repetidos.`);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const anonUserId = `anon_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+      const result = await createBet({
+        poolId: pool.id,
+        matchId: match.id,
+        userId: anonUserId,
+        userName: anonName.trim(),
+        userPhone: anonPhone.trim(),
+        homeScore: homeGols,
+        awayScore: awayGols,
+        isManualBet: false,
+        validated: false
+      });
+
+      if (result.success) {
+        setSuccessBetDetails({
+          name: anonName.trim(),
+          phone: anonPhone.trim(),
+          score: `${homeGols}x${awayGols}`
+        });
+        setAnonName('');
+        setAnonPhone('');
+        setAnonHomeScore('');
+        setAnonAwayScore('');
+        setShowSuccessModal(true);
+      } else {
+        alert(result.message || 'Erro ao registrar palpite');
+      }
+    } catch (err: any) {
+      console.error('Erro ao enviar palpite anônimo:', err);
+      alert('Erro de conexão ao enviar palpite.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const currentHome = anonHomeScore === '' ? null : parseInt(anonHomeScore);
+  const currentAway = anonAwayScore === '' ? null : parseInt(anonAwayScore);
+  const isCurrentScoreInvalid = (() => {
+    if (currentHome === null || currentAway === null) return false;
+    const scoreKey = `${currentHome}x${currentAway}`;
+    const scoreCount = validatedBets.filter(b => `${b.homeScore}x${b.awayScore}` === scoreKey).length;
+    return scoreCount >= pool.maxRepeatedBets;
+  })();
+
+  const cleanPhone = manager?.phone ? manager.phone.replace(/\D/g, '') : '';
+  const finalCleanPhone = (cleanPhone && cleanPhone.length <= 11) ? '55' + cleanPhone : cleanPhone;
+
+  const textMsg = successBetDetails ? `Olá ${manager?.name || 'Gerente'}! Acabei de registrar meu palpite no seu bolão (Copa 2026):
+⚽ ${match.homeTeam.name} ${successBetDetails.score.split('x')[0]} x ${successBetDetails.score.split('x')[1]} ${match.awayTeam.name}
+👤 Apostador: ${successBetDetails.name}
+📞 WhatsApp: ${successBetDetails.phone}
+
+Estou enviando o comprovante do pagamento de R$ ${pool.betValue.toFixed(2)} para validação!` : '';
+
+  const whatsappLink = `https://wa.me/${finalCleanPhone}?text=${encodeURIComponent(textMsg)}`;
 
   return (
     <div className="min-h-screen p-4 md:p-6 pb-20">
@@ -93,6 +178,89 @@ export function PublicPoolView({ poolId, onBack }: { poolId: string; onBack: () 
             <div className="text-lg font-bold text-blue-700">R$ {stats.prizePool.toFixed(0)}</div>
           </div>
         </div>
+
+        {pool.status === 'open' && (
+          <div className="card border-2 border-green-200 bg-gradient-to-r from-green-50/50 to-emerald-50/20 animate-fade-in-up">
+            <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <span>🎯</span> Enviar Palpite Rápido (Sem Login)
+            </h2>
+            <form onSubmit={handleAnonBetSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Seu Nome Completo *</label>
+                  <input 
+                    type="text" 
+                    value={anonName} 
+                    onChange={(e) => setAnonName(e.target.value)} 
+                    placeholder="Ex: João da Silva" 
+                    className="input-field" 
+                    required 
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Seu WhatsApp / Celular *</label>
+                  <input 
+                    type="tel" 
+                    value={anonPhone} 
+                    onChange={(e) => setAnonPhone(e.target.value)} 
+                    placeholder="Ex: (11) 99999-9999" 
+                    className="input-field" 
+                    required 
+                  />
+                </div>
+              </div>
+              
+              <div className="bg-white p-4 rounded-xl border border-gray-100 flex flex-col items-center justify-center gap-3">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Seu Palpite de Placar</span>
+                <div className="flex items-center gap-4">
+                  <div className="flex flex-col items-center">
+                    <TeamFlag team={match.homeTeam} size="md" />
+                    <span className="text-xs font-bold text-gray-500 mt-1">{match.homeTeam.code}</span>
+                  </div>
+                  <input 
+                    type="number" 
+                    min="0" 
+                    max="15" 
+                    value={anonHomeScore} 
+                    onChange={(e) => setAnonHomeScore(e.target.value)} 
+                    className="w-16 h-12 text-center text-2xl font-black border-2 border-gray-200 rounded-xl focus:border-green-500 focus:outline-none" 
+                    required 
+                  />
+                  <span className="text-xl font-black text-gray-300">x</span>
+                  <input 
+                    type="number" 
+                    min="0" 
+                    max="15" 
+                    value={anonAwayScore} 
+                    onChange={(e) => setAnonAwayScore(e.target.value)} 
+                    className="w-16 h-12 text-center text-2xl font-black border-2 border-gray-200 rounded-xl focus:border-green-500 focus:outline-none" 
+                    required 
+                  />
+                  <div className="flex flex-col items-center">
+                    <TeamFlag team={match.awayTeam} size="md" />
+                    <span className="text-xs font-bold text-gray-500 mt-1">{match.awayTeam.code}</span>
+                  </div>
+                </div>
+
+                {isCurrentScoreInvalid && (
+                  <div className="text-xs text-red-600 font-bold bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg animate-pulse flex items-center gap-1.5 mt-2">
+                    <span>⚠️</span> Este placar atingiu o limite de {pool.maxRepeatedBets} palpites repetidos! Escolha outro placar.
+                  </div>
+                )}
+              </div>
+
+              <button 
+                type="submit" 
+                disabled={isSubmitting || isCurrentScoreInvalid} 
+                className={`btn-primary w-full py-3 text-lg font-bold shadow-lg transition-all ${
+                  isCurrentScoreInvalid ? 'opacity-50 cursor-not-allowed bg-gray-400 hover:bg-gray-400 hover:shadow-none' : ''
+                }`}
+              >
+                {isSubmitting ? 'Enviando...' : '🎯 Confirmar meu Palpite!'}
+              </button>
+            </form>
+          </div>
+        )}
 
         {/* Mural de Palpites Agrupado / Resultados */}
         <div className="card">
@@ -205,6 +373,56 @@ export function PublicPoolView({ poolId, onBack }: { poolId: string; onBack: () 
         <div className="text-center text-gray-400 text-xs py-4">
           🏆 Bolão Copa 2026 - Transparência e Diversão
         </div>
+
+        {showSuccessModal && successBetDetails && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full border border-gray-100 shadow-2xl space-y-6 text-center animate-scale-up">
+              <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-4xl mx-auto shadow-inner">
+                🎉
+              </div>
+              <div>
+                <h3 className="text-2xl font-black text-gray-800">Palpite Registrado!</h3>
+                <p className="text-gray-500 text-sm mt-1">Seu palpite foi enviado pendente de validação</p>
+              </div>
+
+              <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-2 text-left text-sm font-medium">
+                <div className="flex justify-between border-b border-gray-200 pb-1.5"><span className="text-gray-400">Apostador:</span><span className="text-gray-800 font-bold">{successBetDetails.name}</span></div>
+                <div className="flex justify-between border-b border-gray-200 pb-1.5"><span className="text-gray-400">Palpite:</span><span className="text-green-700 font-extrabold">{match.homeTeam.flag} {match.homeTeam.code} {successBetDetails.score.split('x')[0]} x {successBetDetails.score.split('x')[1]} {match.awayTeam.code} {match.awayTeam.flag}</span></div>
+                <div className="flex justify-between"><span className="text-gray-400">Valor da Aposta:</span><span className="text-gray-800 font-bold">R$ {pool.betValue.toFixed(2)}</span></div>
+              </div>
+
+              <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-xs text-yellow-800 leading-relaxed text-left">
+                ⚠️ <strong>Atenção:</strong> Para que seu palpite seja validado e apareça oficialmente no mural de palpites públicos, você precisa enviar o comprovante de pagamento para o gerente.
+              </div>
+
+              {manager?.phone ? (
+                <div className="space-y-3">
+                  <a 
+                    href={whatsappLink} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    onClick={() => setShowSuccessModal(false)}
+                    className="flex items-center justify-center gap-2 bg-green-500 text-white font-bold py-3 px-6 rounded-xl hover:bg-green-600 shadow-md hover:shadow-lg transition-all animate-bounce"
+                  >
+                    <span>📱</span> Enviar Comprovante no WhatsApp
+                  </a>
+                  <button onClick={() => setShowSuccessModal(false)} className="text-xs text-gray-400 hover:text-gray-600 font-semibold block mx-auto underline">
+                    Fechar e Ver o Mural
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="text-xs text-red-500 font-semibold bg-red-50 p-2.5 rounded-lg border border-red-100">
+                    ℹ️ O gerente deste bolão não cadastrou um número de WhatsApp no painel. Contate-o diretamente para enviar o comprovante.
+                  </div>
+                  <button onClick={() => setShowSuccessModal(false)} className="btn-primary w-full">
+                    Concluído
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

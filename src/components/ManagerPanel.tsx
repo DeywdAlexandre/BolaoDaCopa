@@ -32,6 +32,8 @@ export function ManagerPanel() {
   const manager = authorizedManagers.find(m => m.email === user?.email);
   const [editingPanelName, setEditingPanelName] = useState(false);
   const [panelName, setPanelName] = useState(manager?.panelName || '');
+  const [editingPhone, setEditingPhone] = useState(false);
+  const [phone, setPhone] = useState(manager?.phone || '');
 
   const managerCode = manager?.code || '';
   const isBlocked = manager?.blocked || false;
@@ -57,6 +59,18 @@ export function ManagerPanel() {
         await updateManager(manager.id, { panelName: panelName.trim() || undefined });
         setEditingPanelName(false);
         toast('Nome do painel atualizado!', 'success');
+      } catch (err: any) {
+        toast(err.message, 'error');
+      }
+    }
+  };
+
+  const handleUpdatePhone = async () => {
+    if (manager) {
+      try {
+        await updateManager(manager.id, { phone: phone.trim() || undefined });
+        setEditingPhone(false);
+        toast('Número de WhatsApp atualizado!', 'success');
       } catch (err: any) {
         toast(err.message, 'error');
       }
@@ -127,7 +141,21 @@ export function ManagerPanel() {
                     <button onClick={() => setEditingPanelName(true)} className="text-xs opacity-50 hover:opacity-100">✏️</button>
                   </div>
                 )}
-                <p className="text-gray-500 text-sm">{user?.name} • {user?.email}</p>
+                <p className="text-gray-500 text-sm flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span>{user?.name} • {user?.email}</span>
+                  {editingPhone ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} className="input-field py-0.5 px-2 text-xs w-36" placeholder="WhatsApp (DDD+Nº)" autoFocus />
+                      <button onClick={handleUpdatePhone} className="text-[10px] bg-green-600 text-white px-1.5 py-0.5 rounded font-bold">Salvar</button>
+                      <button onClick={() => { setEditingPhone(false); setPhone(manager?.phone || ''); }} className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded">×</button>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200 font-semibold">
+                      📞 WhatsApp: {manager?.phone || '(não cadastrado)'}
+                      <button onClick={() => setEditingPhone(true)} className="text-[10px] opacity-70 hover:opacity-100 ml-1">✏️</button>
+                    </span>
+                  )}
+                </p>
               </div>
             </div>
             <button onClick={logout} className="btn-secondary">Sair</button>

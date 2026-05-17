@@ -45,16 +45,18 @@ export function SuperAdminPanel() {
   const [newManagerEmail, setNewManagerEmail] = useState('');
   const [newManagerName, setNewManagerName] = useState('');
   const [newManagerFee, setNewManagerFee] = useState('3');
+  const [newManagerPhone, setNewManagerPhone] = useState('');
   const [showSuccess, setShowSuccess] = useState<string | null>(null);
   const [editingManager, setEditingManager] = useState<string | null>(null);
   const [editFee, setEditFee] = useState('');
-
+  const [editPhone, setEditPhone] = useState('');
+  
   const handleAddManager = async () => {
     if (!newManagerEmail || !newManagerName) { toast('Preencha email e nome', 'warning'); return; }
     try {
-      const code = await addManager(newManagerEmail, newManagerName, parseFloat(newManagerFee) || 3);
+      const code = await addManager(newManagerEmail, newManagerName, parseFloat(newManagerFee) || 3, newManagerPhone);
       setShowSuccess(`Gerente adicionado! Código: ${code}`);
-      setNewManagerEmail(''); setNewManagerName(''); setNewManagerFee('3');
+      setNewManagerEmail(''); setNewManagerName(''); setNewManagerFee('3'); setNewManagerPhone('');
       setTimeout(() => setShowSuccess(null), 5000);
     } catch (err: any) {
       toast(err.message, 'error');
@@ -65,9 +67,9 @@ export function SuperAdminPanel() {
     const fee = parseFloat(editFee);
     if (isNaN(fee) || fee < 0 || fee > 50) { toast('Taxa deve ser entre 0 e 50%', 'warning'); return; }
     try {
-      await updateManager(managerId, { platformFee: fee });
-      setEditingManager(null); setEditFee('');
-      toast('Taxa atualizada com sucesso!', 'success');
+      await updateManager(managerId, { platformFee: fee, phone: editPhone });
+      setEditingManager(null); setEditFee(''); setEditPhone('');
+      toast('Gerente atualizado com sucesso!', 'success');
     } catch (err: any) {
       toast(err.message, 'error');
     }
@@ -105,7 +107,7 @@ export function SuperAdminPanel() {
         </div>
 
         {activeTab === 'dashboard' && <DashboardTab stats={stats} />}
-        {activeTab === 'managers' && <ManagersTab managers={authorizedManagers} pools={pools} bets={bets} newEmail={newManagerEmail} setNewEmail={setNewManagerEmail} newName={newManagerName} setNewName={setNewManagerName} newFee={newManagerFee} setNewFee={setNewManagerFee} showSuccess={showSuccess} onAdd={handleAddManager} onToggleBlock={async (m) => await updateManager(m.id, { blocked: !m.blocked })} onRemove={async (id, name) => { if (confirm(`Remover "${name}"?`)) await removeManager(id); }} editingManager={editingManager} setEditingManager={setEditingManager} editFee={editFee} setEditFee={setEditFee} onUpdateFee={handleUpdateFee} />}
+        {activeTab === 'managers' && <ManagersTab managers={authorizedManagers} pools={pools} bets={bets} newEmail={newManagerEmail} setNewEmail={setNewManagerEmail} newName={newManagerName} setNewName={setNewManagerName} newFee={newManagerFee} setNewFee={setNewManagerFee} newPhone={newManagerPhone} setNewPhone={setNewManagerPhone} showSuccess={showSuccess} onAdd={handleAddManager} onToggleBlock={async (m) => await updateManager(m.id, { blocked: !m.blocked })} onRemove={async (id, name) => { if (confirm(`Remover "${name}"?`)) await removeManager(id); }} editingManager={editingManager} setEditingManager={setEditingManager} editFee={editFee} setEditFee={setEditFee} editPhone={editPhone} setEditPhone={setEditPhone} onUpdateFee={handleUpdateFee} />}
         {activeTab === 'results' && <ResultsTab matches={matches} onUpdateScore={updateMatchScore} onUpdateDetails={updateMatchDetails} onUpdateTeams={updateMatchTeams} onCreateCustomMatch={createCustomMatch} onDeleteMatch={deleteMatch} getGroupStandings={getGroupStandings} onSync={handleSync} seedMatches={seedMatches} apiKey={apiKey} setApiKey={setApiKey} />}
         {activeTab === 'pools' && <PoolsTab pools={pools} matches={matches} managers={authorizedManagers} getBetsByPool={getBetsByPool} />}
         {activeTab === 'bets' && <BetsTab bets={bets} pools={pools} matches={matches} />}

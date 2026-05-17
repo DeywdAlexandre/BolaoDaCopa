@@ -88,6 +88,7 @@ export interface AuthorizedManager {
   code: string; // Código único do gerente
   platformFee: number; // Taxa da plataforma em % (ex: 3)
   panelName?: string; // Nome personalizado do painel (ex: Bolão do José)
+  phone?: string; // WhatsApp do gerente para envio de comprovante
   blocked: boolean; // Se está bloqueado para criar bolões
   authorizedAt: string;
   authorizedBy: string; // ID do super admin

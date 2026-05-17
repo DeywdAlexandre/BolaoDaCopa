@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 interface ManagersContextType {
   authorizedManagers: AuthorizedManager[];
   isLoading: boolean;
-  addManager: (email: string, name: string, platformFee?: number) => Promise<string>;
+  addManager: (email: string, name: string, platformFee?: number, phone?: string) => Promise<string>;
   updateManager: (id: string, updates: Partial<AuthorizedManager>) => Promise<void>;
   removeManager: (id: string) => Promise<void>;
   getManagerByCode: (code: string) => AuthorizedManager | undefined;
@@ -42,6 +42,7 @@ export function ManagersProvider({ children }: { children: ReactNode }) {
           email: m.email,
           name: m.name,
           panelName: m.panel_name,
+          phone: m.phone || undefined,
           code: m.manager_code,
           platformFee: m.platform_fee ? parseFloat(m.platform_fee) : 3,
           blocked: m.blocked || false,
@@ -61,7 +62,7 @@ export function ManagersProvider({ children }: { children: ReactNode }) {
     fetchManagers();
   }, []);
 
-  const addManager = async (email: string, name: string, platformFee: number = 3): Promise<string> => {
+  const addManager = async (email: string, name: string, platformFee: number = 3, phone?: string): Promise<string> => {
     const code = generateCode();
     const { error } = await supabase
       .from('authorized_managers')
@@ -71,6 +72,7 @@ export function ManagersProvider({ children }: { children: ReactNode }) {
         manager_code: code,
         panel_name: `Bolão de ${name}`,
         platform_fee: platformFee,
+        phone: phone || null,
         blocked: false
       });
 
@@ -83,6 +85,7 @@ export function ManagersProvider({ children }: { children: ReactNode }) {
     const fieldsToUpdate: any = {};
     if (updates.name !== undefined) fieldsToUpdate.name = updates.name;
     if (updates.panelName !== undefined) fieldsToUpdate.panel_name = updates.panelName;
+    if (updates.phone !== undefined) fieldsToUpdate.phone = updates.phone || null;
     if (updates.email !== undefined) fieldsToUpdate.email = updates.email;
     if (updates.platformFee !== undefined) fieldsToUpdate.platform_fee = updates.platformFee;
     if (updates.blocked !== undefined) fieldsToUpdate.blocked = updates.blocked;
